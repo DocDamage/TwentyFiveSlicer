@@ -33,6 +33,10 @@ var tests = new (string Name, Action Test)[]
     ("CloudAiRequestBuilder builds OpenAI compatible requests", CloudAiRequestBuilderBuildsOpenAiCompatibleRequests),
     ("CloudAiRequestBuilder builds Anthropic requests", CloudAiRequestBuilderBuildsAnthropicRequests),
     ("CloudAiRequestBuilder builds Gemini requests", CloudAiRequestBuilderBuildsGeminiRequests),
+    ("CloudAiRequestBuilder includes OpenAI image payload", CloudAiRequestBuilderIncludesOpenAiImagePayload),
+    ("CloudAiRequestBuilder includes Anthropic image payload", CloudAiRequestBuilderIncludesAnthropicImagePayload),
+    ("CloudAiRequestBuilder includes Gemini image payload", CloudAiRequestBuilderIncludesGeminiImagePayload),
+    ("CloudAiRequestBuilder omits image payload for text-only providers", CloudAiRequestBuilderOmitsImagePayloadForTextOnlyProviders),
     ("AppStateStore round trips cloud AI settings", AppStateStoreRoundTripsCloudAiSettings),
     ("CloudAiClient parses OpenAI compatible responses", CloudAiClientParsesOpenAiCompatibleResponses),
     ("CloudAiClient parses Anthropic responses", CloudAiClientParsesAnthropicResponses),
@@ -471,6 +475,82 @@ static void CloudAiRequestBuilderBuildsGeminiRequests()
     Assert.True(body.Contains("Analyze this slice."), "Gemini body should include prompt.");
 }
 
+static void CloudAiRequestBuilderIncludesOpenAiImagePayload()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_OPENAI_KEY", "openai-test-key");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("openai")!;
+    var settings = new CloudAiSettings
+    {
+        ProviderId = "openai",
+        ModelId = "gpt-5.1",
+        ApiKeyEnvironmentVariable = "TFS_TEST_OPENAI_KEY"
+    };
+
+    using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, "Analyze this slice.", CreateCloudImage());
+    string body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+
+    Assert.True(body.Contains("\"image_url\""), "OpenAI-compatible vision request should include image_url content.");
+    Assert.True(body.Contains("data:image/png;base64,abc123"), "OpenAI-compatible vision request should include a data image URL.");
+    Assert.True(body.Contains("\"text\":\"Analyze this slice.\""), "OpenAI-compatible vision request should keep the text prompt.");
+}
+
+static void CloudAiRequestBuilderIncludesAnthropicImagePayload()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_ANTHROPIC_KEY", "anthropic-test-key");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("claude")!;
+    var settings = new CloudAiSettings
+    {
+        ProviderId = "anthropic",
+        ModelId = "claude-sonnet-4-5",
+        ApiKeyEnvironmentVariable = "TFS_TEST_ANTHROPIC_KEY"
+    };
+
+    using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, "Analyze this slice.", CreateCloudImage());
+    string body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+
+    Assert.True(body.Contains("\"type\":\"image\""), "Anthropic vision request should include an image content block.");
+    Assert.True(body.Contains("\"media_type\":\"image/png\""), "Anthropic vision request should include the image MIME type.");
+    Assert.True(body.Contains("\"data\":\"abc123\""), "Anthropic vision request should include base64 image data.");
+}
+
+static void CloudAiRequestBuilderIncludesGeminiImagePayload()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_GEMINI_KEY", "gemini-test-key");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("gemini")!;
+    var settings = new CloudAiSettings
+    {
+        ProviderId = "gemini",
+        ModelId = "gemini-3-pro",
+        ApiKeyEnvironmentVariable = "TFS_TEST_GEMINI_KEY"
+    };
+
+    using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, "Analyze this slice.", CreateCloudImage());
+    string body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+
+    Assert.True(body.Contains("\"inlineData\""), "Gemini vision request should include inlineData.");
+    Assert.True(body.Contains("\"mimeType\":\"image/png\""), "Gemini vision request should include the image MIME type.");
+    Assert.True(body.Contains("\"data\":\"abc123\""), "Gemini vision request should include base64 image data.");
+}
+
+static void CloudAiRequestBuilderOmitsImagePayloadForTextOnlyProviders()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_DEEPSEEK_KEY", "deepseek-test-key");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("deepseek")!;
+    var settings = new CloudAiSettings
+    {
+        ProviderId = "deepseek",
+        ModelId = "deepseek-chat",
+        ApiKeyEnvironmentVariable = "TFS_TEST_DEEPSEEK_KEY"
+    };
+
+    using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, "Analyze this slice.", CreateCloudImage());
+    string body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+
+    Assert.True(!body.Contains("abc123"), "Text-only providers should not receive base64 image data.");
+    Assert.True(!body.Contains("\"image_url\""), "Text-only providers should not receive image content blocks.");
+    Assert.True(body.Contains("Analyze this slice."), "Text-only provider request should still include the prompt.");
+}
+
 static void AppStateStoreRoundTripsCloudAiSettings()
 {
     string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.json");
@@ -613,6 +693,11 @@ static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int le
     }
 
     return BitmapSource.Create(width, height, 96d, 96d, PixelFormats.Bgra32, null, pixels, width * 4);
+}
+
+static CloudAiImageInput CreateCloudImage()
+{
+    return new CloudAiImageInput("image/png", "abc123");
 }
 
 static class Assert

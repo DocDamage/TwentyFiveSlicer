@@ -29,11 +29,12 @@ public sealed class CloudAiClient : IDisposable
         CloudAiProviderDescriptor provider,
         CloudAiSettings settings,
         string prompt,
+        CloudAiImageInput? image = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, prompt);
+            using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, prompt, image);
             using HttpResponseMessage response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 

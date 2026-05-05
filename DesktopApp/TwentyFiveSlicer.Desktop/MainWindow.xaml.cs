@@ -280,9 +280,12 @@ public partial class MainWindow : Window
 
         string prompt = BuildCloudAiPrompt();
         CloudAiSettings settings = CreateCloudAiSettings();
-        AssistantResultText.Text = $"Asking {provider.DisplayName}...";
+        CloudAiImageInput? image = CreateCloudAiImageInput(provider);
+        AssistantResultText.Text = image is null
+            ? $"Asking {provider.DisplayName}..."
+            : $"Asking {provider.DisplayName} with image context...";
 
-        CloudAiResult result = await _cloudAiClient.AskAsync(provider, settings, prompt);
+        CloudAiResult result = await _cloudAiClient.AskAsync(provider, settings, prompt, image);
         AssistantResultText.Text = result.Success
             ? $"Cloud AI ({provider.DisplayName}) advice:\n{result.Advice}"
             : $"Cloud AI was unavailable: {result.ErrorMessage}\n\nLocal fallback:\n{BuildLocalFallbackAdvice()}";
@@ -1033,6 +1036,21 @@ public partial class MainWindow : Window
         }
 
         return builder.ToString();
+    }
+
+    private CloudAiImageInput? CreateCloudAiImageInput(CloudAiProviderDescriptor provider)
+    {
+        if (_sourceImage is null || !provider.SupportsVision)
+        {
+            return null;
+        }
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(_sourceImage));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+
+        return new CloudAiImageInput("image/png", Convert.ToBase64String(stream.ToArray()));
     }
 
     private string BuildLocalFallbackAdvice()
