@@ -233,6 +233,7 @@ The desktop app includes local assistant features and optional cloud AI.
 
 Local assistant features:
 
+- Chat-style local assistant panel with message history, reviewed proposals, preview, apply, and reject controls.
 - Detect transparent padding and suggest borders.
 - Analyze the current slice setup for warnings.
 - Apply natural-language slice edits such as "make this a button", "make this a panel", "symmetrize", or "make corners thicker".

@@ -34,6 +34,8 @@ public partial class MainWindow : Window
     private TextBox[] _horizontalTextBoxes = Array.Empty<TextBox>();
     private readonly RecentFileList _recentFiles = new();
     private readonly SliceAssistantService _assistant = new();
+    private readonly SliceChatService _chat = new();
+    private readonly List<string> _chatMessages = [];
     private readonly AppStateStore _appStateStore = new(AppStatePath);
     private readonly IReadOnlyList<CloudAiProviderDescriptor> _cloudAiProviders = CloudAiProviderCatalog.GetAll();
     private readonly CloudAiClient _cloudAiClient = new();
@@ -51,6 +53,9 @@ public partial class MainWindow : Window
     private SliceAssistantAnalysis? _lastAssistantAnalysis;
     private IReadOnlyList<SliceCandidateSuggestion> _lastCandidateSuggestions = [];
     private SliceEditorState? _candidatePreviewReturnState;
+    private SliceEditorState? _chatPreviewReturnState;
+    private TwentyFiveSliceData? _pendingChatProposal;
+    private SliceSuggestionReview? _pendingChatReview;
     private bool _isUpdatingUi;
     private bool _isSyncingTargetSize;
     private bool _isRestoringSession;
@@ -69,6 +74,7 @@ public partial class MainWindow : Window
         CloudAiProviderComboBox.ItemsSource = _cloudAiProviders;
         CloudAiProviderComboBox.DisplayMemberPath = nameof(CloudAiProviderDescriptor.DisplayName);
         CloudAiProviderComboBox.SelectedValuePath = nameof(CloudAiProviderDescriptor.Id);
+        ChatMessagesListBox.ItemsSource = _chatMessages;
         PreviewControl.PreviewZoomChanged += PreviewControl_PreviewZoomChanged;
         LoadAppState();
         UpdatePresetLibraryUi();
@@ -262,6 +268,59 @@ public partial class MainWindow : Window
         }
 
         AssistantResultText.Text = result.Message;
+    }
+
+    private void SendChat_Click(object sender, RoutedEventArgs e)
+    {
+        SendChatMessage();
+    }
+
+    private void PreviewChatProposal_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pendingChatProposal is null)
+        {
+            AddChatMessage("Assistant: No chat proposal is waiting to preview.");
+            return;
+        }
+
+        _chatPreviewReturnState ??= CreateEditorState();
+        ApplySliceData(_pendingChatProposal);
+        AddChatMessage("Assistant: Previewing the latest chat proposal.");
+    }
+
+    private void ApplyChatProposal_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pendingChatProposal is null)
+        {
+            AddChatMessage("Assistant: No chat proposal is waiting to apply.");
+            return;
+        }
+
+        if (_pendingChatReview?.SafeToApply != true)
+        {
+            AddChatMessage("Assistant: I am not applying that automatically because the deterministic review found risks.");
+            return;
+        }
+
+        ApplySliceData(_pendingChatProposal);
+        RememberCurrentState();
+        _pendingChatProposal = null;
+        _pendingChatReview = null;
+        _chatPreviewReturnState = null;
+        AddChatMessage("Assistant: Applied the reviewed chat proposal.");
+    }
+
+    private void RejectChatProposal_Click(object sender, RoutedEventArgs e)
+    {
+        if (_chatPreviewReturnState is not null)
+        {
+            ApplyEditorState(_chatPreviewReturnState);
+        }
+
+        _pendingChatProposal = null;
+        _pendingChatReview = null;
+        _chatPreviewReturnState = null;
+        AddChatMessage("Assistant: Rejected the pending chat proposal.");
     }
 
     private async void AskCloudAi_Click(object sender, RoutedEventArgs e)
@@ -603,6 +662,15 @@ public partial class MainWindow : Window
         ApplyBorderTextBoxValue(sender);
         Keyboard.ClearFocus();
         e.Handled = true;
+    }
+
+    private void ChatInputBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            SendChatMessage();
+            e.Handled = true;
+        }
     }
 
     private void PreviewControl_GuideEditChanged(object? sender, SliceGuideEditEventArgs e)
@@ -1001,6 +1069,58 @@ public partial class MainWindow : Window
         CandidateComboBox.SelectedIndex = _lastCandidateSuggestions.Count > 0 ? 0 : -1;
     }
 
+    private void SendChatMessage()
+    {
+        string message = ChatInputBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        AddChatMessage($"You: {message}");
+        SliceChatResponse response = _chat.Send(message, CreateChatContext());
+        _pendingChatProposal = response.ProposedSliceData;
+        _pendingChatReview = response.Review;
+        _chatPreviewReturnState = null;
+        AddChatMessage($"Assistant: {response.AssistantMessage}");
+
+        if (response.Review is not null)
+        {
+            AddChatMessage($"Review: {FormatSuggestionReview(response.Review)}");
+        }
+
+        AssistantResultText.Text = response.AssistantMessage;
+        ChatInputBox.Text = string.Empty;
+        SaveAppState();
+    }
+
+    private SliceChatContext CreateChatContext()
+    {
+        double sourceWidth = _sourceImage?.PixelWidth ?? TargetWidthSlider.Value;
+        double sourceHeight = _sourceImage?.PixelHeight ?? TargetHeightSlider.Value;
+        return new SliceChatContext(
+            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+            sourceWidth,
+            sourceHeight,
+            TargetWidthSlider.Value,
+            TargetHeightSlider.Value);
+    }
+
+    private void AddChatMessage(string message)
+    {
+        _chatMessages.Add(message);
+        while (_chatMessages.Count > 80)
+        {
+            _chatMessages.RemoveAt(0);
+        }
+
+        ChatMessagesListBox.Items.Refresh();
+        if (_chatMessages.Count > 0)
+        {
+            ChatMessagesListBox.ScrollIntoView(_chatMessages[^1]);
+        }
+    }
+
     private SliceCandidateSuggestion? GetSelectedCandidate()
     {
         return CandidateComboBox.SelectedItem as SliceCandidateSuggestion ??
@@ -1177,7 +1297,8 @@ public partial class MainWindow : Window
             SourceGuides = SourceComparisonCheckBox.IsChecked == true,
             FlipX = FlipXCheckBox.IsChecked == true,
             FlipY = FlipYCheckBox.IsChecked == true,
-            AssistantOutput = AssistantResultText.Text
+            AssistantOutput = AssistantResultText.Text,
+            ChatMessages = _chatMessages.ToList()
         };
     }
 
@@ -1211,6 +1332,10 @@ public partial class MainWindow : Window
             {
                 AssistantResultText.Text = session.AssistantOutput;
             }
+
+            _chatMessages.Clear();
+            _chatMessages.AddRange(session.ChatMessages);
+            ChatMessagesListBox.Items.Refresh();
         }
         catch (Exception exception)
         {

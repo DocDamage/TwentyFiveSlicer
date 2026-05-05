@@ -301,6 +301,26 @@
                                            Foreground="{StaticResource TextBrush}"
                                            FontSize="18"
                                            FontWeight="SemiBold" />
+                                <ListBox x:Name="ChatMessagesListBox"
+                                         Margin="0,12,0,10"
+                                         MinHeight="150"
+                                         MaxHeight="240"
+                                         Background="#66111A20"
+                                         Foreground="{StaticResource TextBrush}"
+                                         BorderBrush="{StaticResource CardBorderBrush}" />
+                                <TextBox x:Name="ChatInputBox"
+                                         Margin="0,0,0,10"
+                                         MinHeight="48"
+                                         TextWrapping="Wrap"
+                                         AcceptsReturn="True"
+                                         Text="make this a button"
+                                         KeyDown="ChatInputBox_KeyDown" />
+                                <WrapPanel>
+                                    <Button Content="Send Chat" Style="{StaticResource ActionButtonStyle}" Click="SendChat_Click" />
+                                    <Button Content="Preview Chat Proposal" Style="{StaticResource ActionButtonStyle}" Click="PreviewChatProposal_Click" />
+                                    <Button Content="Apply Chat Proposal" Style="{StaticResource ActionButtonStyle}" Click="ApplyChatProposal_Click" />
+                                    <Button Content="Reject Chat Proposal" Style="{StaticResource ActionButtonStyle}" Click="RejectChatProposal_Click" />
+                                </WrapPanel>
                                 <TextBox x:Name="AssistantPromptBox"
                                          Margin="0,12,0,10"
                                          MinHeight="58"

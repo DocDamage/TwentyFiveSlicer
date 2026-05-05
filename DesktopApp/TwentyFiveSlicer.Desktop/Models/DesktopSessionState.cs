@@ -29,4 +29,6 @@ public sealed class DesktopSessionState
     public bool FlipY { get; set; }
 
     public string? AssistantOutput { get; set; }
+
+    public List<string> ChatMessages { get; set; } = [];
 }

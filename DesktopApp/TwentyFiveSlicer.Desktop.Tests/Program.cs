@@ -72,7 +72,9 @@ var tests = new (string Name, Action Test)[]
     ("SliceSuggestionReview blocks risky AI cuts", SliceSuggestionReviewBlocksRiskyAiCuts),
     ("SliceSuggestionReview rewards warning reductions", SliceSuggestionReviewRewardsWarningReductions),
     ("SliceSuggestionReview rewards image padding alignment", SliceSuggestionReviewRewardsImagePaddingAlignment),
-    ("SliceSuggestionReview blocks image padding mismatch", SliceSuggestionReviewBlocksImagePaddingMismatch)
+    ("SliceSuggestionReview blocks image padding mismatch", SliceSuggestionReviewBlocksImagePaddingMismatch),
+    ("SliceChatService creates reviewed suggestion", SliceChatServiceCreatesReviewedSuggestion),
+    ("SliceChatService answers analysis without proposal", SliceChatServiceAnswersAnalysisWithoutProposal)
 };
 
 int failures = 0;
@@ -652,7 +654,8 @@ static void AppStateStoreRoundTripsLastSession()
             SourceGuides = true,
             FlipX = true,
             FlipY = false,
-            AssistantOutput = "Best fit: Button"
+            AssistantOutput = "Best fit: Button",
+            ChatMessages = ["You: make this a button", "Assistant: proposal ready"]
         }
     };
 
@@ -671,6 +674,7 @@ static void AppStateStoreRoundTripsLastSession()
         Assert.Equal(true, session.KeepAspect, "Toggle state should round trip.");
         Assert.Equal(88d, session.SliceData.VerticalBorders[3], "Slice data should round trip.");
         Assert.Equal("Best fit: Button", session.AssistantOutput, "Assistant output should round trip.");
+        Assert.SequenceEqual(new[] { "You: make this a button", "Assistant: proposal ready" }, session.ChatMessages);
     }
     finally
     {
@@ -1212,6 +1216,39 @@ static void SliceSuggestionReviewBlocksImagePaddingMismatch()
         Assert.True(review.Risks.Any(risk => risk.Contains("opaque content bounds", StringComparison.OrdinalIgnoreCase)), "Review should explain image-bound mismatch.");
         Assert.True(review.Score < 0.78d, "Image-bound mismatch should lower the score below the safe threshold.");
     });
+}
+
+static void SliceChatServiceCreatesReviewedSuggestion()
+{
+    var chat = new SliceChatService();
+    var context = new SliceChatContext(
+        TwentyFiveSliceData.CreateDefault(),
+        SourceWidth: 1000d,
+        SourceHeight: 1000d,
+        TargetWidth: 400d,
+        TargetHeight: 400d);
+
+    SliceChatResponse response = chat.Send("make this a button", context);
+
+    Assert.True(response.ProposedSliceData is not null, "Known edit prompts should return a proposed slice.");
+    Assert.True(response.Review is not null, "Proposed slices should include deterministic review.");
+    Assert.True(response.AssistantMessage.Contains("review", StringComparison.OrdinalIgnoreCase), "Chat response should mention review status.");
+}
+
+static void SliceChatServiceAnswersAnalysisWithoutProposal()
+{
+    var chat = new SliceChatService();
+    var context = new SliceChatContext(
+        TwentyFiveSliceData.CreateDefault(),
+        SourceWidth: 1000d,
+        SourceHeight: 500d,
+        TargetWidth: 640d,
+        TargetHeight: 160d);
+
+    SliceChatResponse response = chat.Send("what do you think about this?", context);
+
+    Assert.True(response.ProposedSliceData is null, "Analysis prompts should not propose a slice edit.");
+    Assert.True(response.AssistantMessage.Contains("looks like", StringComparison.OrdinalIgnoreCase), "Analysis response should summarize the current slice.");
 }
 
 static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int left, int right, int top, int bottom)
