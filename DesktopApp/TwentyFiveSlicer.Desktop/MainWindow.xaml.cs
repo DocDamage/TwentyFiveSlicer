@@ -91,7 +91,7 @@ public partial class MainWindow : Window
 
     private void CandySkinChanged(object sender, RoutedEventArgs e)
     {
-        if (!_isWindowReady && CandySkinCheckBox is null)
+        if (!_isWindowReady || CandySkinCheckBox is null)
         {
             return;
         }
@@ -1306,6 +1306,11 @@ public partial class MainWindow : Window
 
     private void SaveAppState()
     {
+        if (!_isWindowReady)
+        {
+            return;
+        }
+
         var state = new DesktopAppState
         {
             RecentFiles = _recentFiles.Files.ToList(),

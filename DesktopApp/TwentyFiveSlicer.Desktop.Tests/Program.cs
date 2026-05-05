@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using TwentyFiveSlicer.Desktop;
 using TwentyFiveSlicer.Desktop.Controls;
 using TwentyFiveSlicer.Desktop.Models;
 using TwentyFiveSlicer.Desktop.Services;
@@ -101,6 +102,7 @@ var tests = new (string Name, Action Test)[]
     ("Slice skin panel renders clean fallback", SliceSkinPanelRendersCleanFallback),
     ("Main window uses skinned card surfaces", MainWindowUsesSkinnedCardSurfaces),
     ("Main window exposes Candy skin toggle and button skin", MainWindowExposesCandySkinToggleAndButtonSkin),
+    ("Main window constructs without startup event crash", MainWindowConstructsWithoutStartupEventCrash),
     ("Slice concept diagram renders", SliceConceptDiagramRenders)
 };
 
@@ -444,6 +446,15 @@ static void MainWindowExposesCandySkinToggleAndButtonSkin()
     Assert.True(xaml.Contains("button-hover.png", StringComparison.Ordinal), "Button template should use the Candy hover button asset.");
     Assert.True(xaml.Contains("button-pressed.png", StringComparison.Ordinal), "Button template should use the Candy pressed button asset.");
     Assert.True(xaml.Contains("FallbackBackground=\"{TemplateBinding Background}\"", StringComparison.Ordinal), "Button template should retain clean fallback styling.");
+}
+
+static void MainWindowConstructsWithoutStartupEventCrash()
+{
+    RunOnStaThread(() =>
+    {
+        var window = new MainWindow();
+        window.Close();
+    });
 }
 
 static void SliceConceptDiagramRenders()
