@@ -36,6 +36,13 @@
             <Setter Property="Padding" Value="18" />
         </Style>
 
+        <Style x:Key="SkinnedCardStyle" TargetType="{x:Type controls:SliceSkinPanel}">
+            <Setter Property="Source" Value="Assets/Skin/Candy/panel-subtle.png" />
+            <Setter Property="SliceDataSource" Value="Assets/Skin/Candy/panel-subtle.25slice.json" />
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+
         <Style x:Key="ActionButtonStyle" TargetType="Button">
             <Setter Property="Margin" Value="0,0,10,10" />
             <Setter Property="Padding" Value="16,10" />
@@ -177,9 +184,7 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
-                        <Border Style="{StaticResource CardStyle}"
-                                Background="{StaticResource CardBrush}"
-                                Margin="0,0,0,14">
+                        <controls:SliceSkinPanel Style="{StaticResource SkinnedCardStyle}">
                             <StackPanel>
                                 <TextBlock Text="Source"
                                            Foreground="{StaticResource TextBrush}"
@@ -198,11 +203,9 @@
                                           Margin="0,12,0,0"
                                           SelectionChanged="RecentFilesComboBox_SelectionChanged" />
                             </StackPanel>
-                        </Border>
+                        </controls:SliceSkinPanel>
 
-                        <Border Style="{StaticResource CardStyle}"
-                                Background="{StaticResource CardBrush}"
-                                Margin="0,0,0,14">
+                        <controls:SliceSkinPanel Style="{StaticResource SkinnedCardStyle}">
                             <StackPanel>
                                 <TextBlock Text="Preview Output"
                                            Foreground="{StaticResource TextBrush}"
@@ -340,11 +343,9 @@
                                               Unchecked="PreviewSettingChanged" />
                                 </WrapPanel>
                             </StackPanel>
-                        </Border>
+                        </controls:SliceSkinPanel>
 
-                        <Border Style="{StaticResource CardStyle}"
-                                Background="{StaticResource CardBrush}"
-                                Margin="0,0,0,14">
+                        <controls:SliceSkinPanel Style="{StaticResource SkinnedCardStyle}">
                             <StackPanel>
                                 <TextBlock Text="Assistant"
                                            Foreground="{StaticResource TextBrush}"
@@ -495,12 +496,9 @@
                                            TextWrapping="Wrap"
                                            Text="Local assistant uses image transparency, validation, and known slice-edit commands." />
                             </StackPanel>
-                        </Border>
+                        </controls:SliceSkinPanel>
 
-                        <controls:SliceSkinPanel Source="Assets/Skin/Candy/panel-subtle.png"
-                                                 SliceDataSource="Assets/Skin/Candy/panel-subtle.25slice.json"
-                                                 Padding="18"
-                                                 Margin="0,0,0,14">
+                        <controls:SliceSkinPanel Style="{StaticResource SkinnedCardStyle}">
                             <StackPanel>
                                 <TextBlock Text="Checks"
                                            Foreground="{StaticResource TextBrush}"
@@ -523,9 +521,7 @@
                             </StackPanel>
                         </controls:SliceSkinPanel>
 
-                        <Border Style="{StaticResource CardStyle}"
-                                Background="{StaticResource CardBrush}"
-                                Margin="0,0,0,14">
+                        <controls:SliceSkinPanel Style="{StaticResource SkinnedCardStyle}">
                             <StackPanel>
                                 <TextBlock Text="Vertical Borders"
                                            Foreground="{StaticResource TextBrush}"
@@ -570,10 +566,10 @@
                                     <TextBox x:Name="Vertical4TextBox" Grid.Row="3" Grid.Column="3" Tag="V3" Margin="8,0,0,6" LostFocus="BorderTextBoxCommitted" KeyDown="BorderTextBox_KeyDown" Text="80" />
                                 </Grid>
                             </StackPanel>
-                        </Border>
+                        </controls:SliceSkinPanel>
 
-                        <Border Style="{StaticResource CardStyle}"
-                                Background="{StaticResource CardBrush}">
+                        <controls:SliceSkinPanel Style="{StaticResource SkinnedCardStyle}"
+                                                 Margin="0">
                             <StackPanel>
                                 <TextBlock Text="Horizontal Borders"
                                            Foreground="{StaticResource TextBrush}"
@@ -618,7 +614,7 @@
                                     <TextBox x:Name="Horizontal4TextBox" Grid.Row="3" Grid.Column="3" Tag="H3" Margin="8,0,0,6" LostFocus="BorderTextBoxCommitted" KeyDown="BorderTextBox_KeyDown" Text="80" />
                                 </Grid>
                             </StackPanel>
-                        </Border>
+                        </controls:SliceSkinPanel>
                     </StackPanel>
                 </ScrollViewer>
             </DockPanel>

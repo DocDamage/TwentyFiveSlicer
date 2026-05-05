@@ -89,6 +89,7 @@ var tests = new (string Name, Action Test)[]
     ("Registered SVG assets render", RegisteredSvgAssetsRender),
     ("App icon assets exist", AppIconAssetsExist),
     ("Slice skin panel renders Candy asset", SliceSkinPanelRendersCandyAsset),
+    ("Main window uses skinned card surfaces", MainWindowUsesSkinnedCardSurfaces),
     ("Slice concept diagram renders", SliceConceptDiagramRenders)
 };
 
@@ -286,6 +287,16 @@ static void SliceSkinPanelRendersCandyAsset()
         Assert.Equal(120, bitmap.PixelHeight, "Skin panel render should preserve requested height.");
         Assert.True(BitmapHasVisiblePixels(bitmap), "Skin panel render should include visible pixels.");
     });
+}
+
+static void MainWindowUsesSkinnedCardSurfaces()
+{
+    string xamlPath = Path.Combine(DesktopProjectRoot(), "MainWindow.xaml");
+    string xaml = File.ReadAllText(xamlPath);
+
+    int skinnedCardCount = CountOccurrences(xaml, "Style=\"{StaticResource SkinnedCardStyle}\"");
+    Assert.True(skinnedCardCount >= 6, "Sidebar cards should use the reusable sliced skin panel style.");
+    Assert.True(xaml.Contains("x:Key=\"SkinnedCardStyle\"", StringComparison.Ordinal), "Main window should define the skinned card style.");
 }
 
 static void SliceConceptDiagramRenders()
@@ -1578,6 +1589,19 @@ static bool IsPng(byte[] bytes)
     byte[] signature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
     return bytes.Length >= signature.Length &&
         signature.SequenceEqual(bytes.Take(signature.Length));
+}
+
+static int CountOccurrences(string value, string pattern)
+{
+    int count = 0;
+    int index = 0;
+    while ((index = value.IndexOf(pattern, index, StringComparison.Ordinal)) >= 0)
+    {
+        count++;
+        index += pattern.Length;
+    }
+
+    return count;
 }
 
 static void RunOnStaThread(Action action)
