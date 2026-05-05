@@ -193,4 +193,33 @@ You can remove slice data that is no longer needed:
 
 ---
 
+## Desktop App Port
+
+A standalone Windows desktop port now lives in `DesktopApp/TwentyFiveSlicer.Desktop`.
+
+It keeps the core 25-slice layout behavior from the Unity package:
+
+- 4 vertical borders and 4 horizontal borders stored as percentages.
+- Fixed/stretched distribution across the 5x5 grid using the same column and row rules.
+- Live preview of the rendered 25-slice output, plus optional debug coloring and flip X/Y.
+- JSON import/export for slice border data.
+
+### Build
+
+```powershell
+dotnet build .\DesktopApp\TwentyFiveSlicer.Desktop\TwentyFiveSlicer.Desktop.csproj
+```
+
+### Publish a standalone exe
+
+```powershell
+dotnet publish .\DesktopApp\TwentyFiveSlicer.Desktop\TwentyFiveSlicer.Desktop.csproj -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true
+```
+
+Published output:
+
+- `DesktopApp/TwentyFiveSlicer.Desktop/bin/Release/net8.0-windows/win-x64/publish/TwentyFiveSlicer.Desktop.exe`
+
+---
+
 For more information or contributions, visit the [repository](https://github.com/kwan3854/TwentyFiveSlicer).

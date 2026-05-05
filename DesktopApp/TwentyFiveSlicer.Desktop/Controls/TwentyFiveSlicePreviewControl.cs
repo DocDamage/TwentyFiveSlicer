@@ -1,0 +1,295 @@
+using System.Globalization;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using TwentyFiveSlicer.Desktop.Models;
+using TwentyFiveSlicer.Desktop.Services;
+
+namespace TwentyFiveSlicer.Desktop.Controls;
+
+public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
+{
+    private static readonly Brush SurfaceBrush = CreateBrush(12, 17, 22);
+    private static readonly Brush SurfaceHighlightBrush = CreateBrush(20, 29, 35, 160);
+    private static readonly Brush CheckerDarkBrush = CreateBrush(33, 42, 48);
+    private static readonly Brush CheckerLightBrush = CreateBrush(49, 60, 67);
+    private static readonly Brush EmptyStateTitleBrush = CreateBrush(241, 234, 219);
+    private static readonly Brush EmptyStateBodyBrush = CreateBrush(145, 165, 166);
+    private static readonly Pen FramePen = CreatePen(70, 199, 190, 180, 1.5);
+    private static readonly Pen SliceOutlinePen = CreatePen(255, 255, 255, 28, 0.75);
+    private static readonly Pen ShadowPen = CreatePen(0, 0, 0, 60, 18d);
+
+    private BitmapSource? _sourceImage;
+    private TwentyFiveSliceData _sliceData = TwentyFiveSliceData.CreateDefault();
+    private double _targetWidth = 640d;
+    private double _targetHeight = 360d;
+    private bool _debuggingView;
+    private bool _flipX;
+    private bool _flipY;
+
+    public TwentyFiveSlicePreviewControl()
+    {
+        SnapsToDevicePixels = true;
+        UseLayoutRounding = true;
+    }
+
+    public BitmapSource? SourceImage
+    {
+        get => _sourceImage;
+        set
+        {
+            _sourceImage = value;
+            InvalidateVisual();
+        }
+    }
+
+    public TwentyFiveSliceData SliceData
+    {
+        get => _sliceData;
+        set
+        {
+            _sliceData = value ?? TwentyFiveSliceData.CreateDefault();
+            InvalidateVisual();
+        }
+    }
+
+    public double TargetWidth
+    {
+        get => _targetWidth;
+        set
+        {
+            _targetWidth = Math.Max(1d, value);
+            InvalidateVisual();
+        }
+    }
+
+    public double TargetHeight
+    {
+        get => _targetHeight;
+        set
+        {
+            _targetHeight = Math.Max(1d, value);
+            InvalidateVisual();
+        }
+    }
+
+    public bool DebuggingView
+    {
+        get => _debuggingView;
+        set
+        {
+            _debuggingView = value;
+            InvalidateVisual();
+        }
+    }
+
+    public bool FlipX
+    {
+        get => _flipX;
+        set
+        {
+            _flipX = value;
+            InvalidateVisual();
+        }
+    }
+
+    public bool FlipY
+    {
+        get => _flipY;
+        set
+        {
+            _flipY = value;
+            InvalidateVisual();
+        }
+    }
+
+    protected override void OnRender(DrawingContext drawingContext)
+    {
+        base.OnRender(drawingContext);
+
+        var fullRect = new Rect(0d, 0d, ActualWidth, ActualHeight);
+        drawingContext.DrawRectangle(SurfaceBrush, null, fullRect);
+        drawingContext.DrawRectangle(SurfaceHighlightBrush, null, new Rect(14d, 14d, Math.Max(0d, ActualWidth - 28d), 92d));
+
+        if (_sourceImage is null)
+        {
+            DrawEmptyState(drawingContext, fullRect);
+            return;
+        }
+
+        double safeTargetWidth = Math.Max(1d, TargetWidth);
+        double safeTargetHeight = Math.Max(1d, TargetHeight);
+        var availableRect = new Rect(28d, 28d, Math.Max(0d, ActualWidth - 56d), Math.Max(0d, ActualHeight - 56d));
+        if (availableRect.Width <= 0d || availableRect.Height <= 0d)
+        {
+            return;
+        }
+
+        double scale = Math.Min(availableRect.Width / safeTargetWidth, availableRect.Height / safeTargetHeight);
+        if (double.IsNaN(scale) || double.IsInfinity(scale) || scale <= 0d)
+        {
+            scale = 1d;
+        }
+
+        var previewRect = new Rect(
+            availableRect.X + (availableRect.Width - (safeTargetWidth * scale)) / 2d,
+            availableRect.Y + (availableRect.Height - (safeTargetHeight * scale)) / 2d,
+            safeTargetWidth * scale,
+            safeTargetHeight * scale);
+
+        DrawShadow(drawingContext, previewRect);
+        DrawCheckerboard(drawingContext, previewRect, Math.Clamp(18d * scale, 8d, 34d));
+
+        IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(
+            _sourceImage.PixelWidth,
+            _sourceImage.PixelHeight,
+            safeTargetWidth,
+            safeTargetHeight,
+            SliceData,
+            FlipX,
+            FlipY);
+
+        foreach (SliceRegion region in regions)
+        {
+            var destinationRect = new Rect(
+                previewRect.X + (region.Destination.X * scale),
+                previewRect.Y + (region.Destination.Y * scale),
+                region.Destination.Width * scale,
+                region.Destination.Height * scale);
+
+            if (destinationRect.Width <= 0d || destinationRect.Height <= 0d)
+            {
+                continue;
+            }
+
+            drawingContext.DrawRectangle(CreateSourceBrush(region.Source), null, destinationRect);
+
+            if (DebuggingView)
+            {
+                drawingContext.DrawRectangle(CreateDebugOverlay(region.Column, region.Row), null, destinationRect);
+            }
+
+            drawingContext.DrawRectangle(null, SliceOutlinePen, destinationRect);
+        }
+
+        drawingContext.DrawRectangle(null, FramePen, previewRect);
+        DrawPreviewLabel(drawingContext, previewRect, scale);
+    }
+
+    private void DrawEmptyState(DrawingContext drawingContext, Rect bounds)
+    {
+        double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+
+        var title = new FormattedText(
+            "Load an image to preview the 25-slice layout.",
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface("Bahnschrift SemiBold"),
+            26d,
+            EmptyStateTitleBrush,
+            pixelsPerDip);
+
+        var body = new FormattedText(
+            "The desktop port preserves the original fixed/stretch column logic and renders all 25 regions live.",
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface("Bahnschrift"),
+            15d,
+            EmptyStateBodyBrush,
+            pixelsPerDip)
+        {
+            MaxTextWidth = Math.Max(240d, bounds.Width - 120d),
+            TextAlignment = TextAlignment.Center
+        };
+
+        Point titlePosition = new((bounds.Width - title.Width) / 2d, (bounds.Height / 2d) - 36d);
+        Point bodyPosition = new((bounds.Width - body.Width) / 2d, titlePosition.Y + 46d);
+
+        drawingContext.DrawText(title, titlePosition);
+        drawingContext.DrawText(body, bodyPosition);
+    }
+
+    private void DrawShadow(DrawingContext drawingContext, Rect previewRect)
+    {
+        drawingContext.DrawRoundedRectangle(null, ShadowPen, new Rect(previewRect.X + 10d, previewRect.Y + 12d, previewRect.Width, previewRect.Height), 18d, 18d);
+    }
+
+    private void DrawCheckerboard(DrawingContext drawingContext, Rect previewRect, double cellSize)
+    {
+        int rowCount = (int)Math.Ceiling(previewRect.Height / cellSize);
+        int columnCount = (int)Math.Ceiling(previewRect.Width / cellSize);
+
+        for (int row = 0; row < rowCount; row++)
+        {
+            for (int column = 0; column < columnCount; column++)
+            {
+                double x = previewRect.X + (column * cellSize);
+                double y = previewRect.Y + (row * cellSize);
+                double width = Math.Min(cellSize, previewRect.Right - x);
+                double height = Math.Min(cellSize, previewRect.Bottom - y);
+                if (width <= 0d || height <= 0d)
+                {
+                    continue;
+                }
+
+                Brush fill = ((row + column) % 2 == 0) ? CheckerDarkBrush : CheckerLightBrush;
+                drawingContext.DrawRectangle(fill, null, new Rect(x, y, width, height));
+            }
+        }
+    }
+
+    private void DrawPreviewLabel(DrawingContext drawingContext, Rect previewRect, double scale)
+    {
+        double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        string label = $"{TargetWidth:0} x {TargetHeight:0} preview at {scale * 100d:0}%";
+        var text = new FormattedText(
+            label,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface("Bahnschrift SemiBold"),
+            13d,
+            EmptyStateTitleBrush,
+            pixelsPerDip);
+
+        var labelRect = new Rect(previewRect.X, previewRect.Y - 34d, Math.Max(180d, text.Width + 18d), 26d);
+        drawingContext.DrawRoundedRectangle(SurfaceHighlightBrush, null, labelRect, 12d, 12d);
+        drawingContext.DrawText(text, new Point(labelRect.X + 9d, labelRect.Y + 5d));
+    }
+
+    private ImageBrush CreateSourceBrush(FloatRect sourceRect)
+    {
+        return new ImageBrush(_sourceImage)
+        {
+            AlignmentX = AlignmentX.Left,
+            AlignmentY = AlignmentY.Top,
+            Stretch = Stretch.Fill,
+            Viewbox = new Rect(sourceRect.X, sourceRect.Y, sourceRect.Width, sourceRect.Height),
+            ViewboxUnits = BrushMappingMode.Absolute
+        };
+    }
+
+    private static Brush CreateDebugOverlay(int column, int row)
+    {
+        byte red = (byte)(45 + (column * 42));
+        byte green = (byte)(55 + (row * 38));
+        byte blue = (byte)(90 + ((column + row) * 18));
+        return CreateBrush(red, green, blue, 110);
+    }
+
+    private static SolidColorBrush CreateBrush(byte red, byte green, byte blue, byte alpha = 255)
+    {
+        var brush = new SolidColorBrush(Color.FromArgb(alpha, red, green, blue));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Pen CreatePen(byte red, byte green, byte blue, byte alpha, double thickness)
+    {
+        var pen = new Pen(CreateBrush(red, green, blue, alpha), thickness)
+        {
+            LineJoin = PenLineJoin.Round
+        };
+        pen.Freeze();
+        return pen;
+    }
+}

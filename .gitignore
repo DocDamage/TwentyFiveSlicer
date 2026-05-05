@@ -74,3 +74,8 @@ crashlytics-build.properties
 # macOS Finder file that stores custom view settings
 .DS_Store
 
+# .NET desktop port
+!DesktopApp/**/*.csproj
+DesktopApp/**/bin/
+DesktopApp/**/obj/
+
