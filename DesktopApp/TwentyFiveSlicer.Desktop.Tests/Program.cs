@@ -74,6 +74,7 @@ var tests = new (string Name, Action Test)[]
     ("SliceSuggestionReview rewards image padding alignment", SliceSuggestionReviewRewardsImagePaddingAlignment),
     ("SliceSuggestionReview blocks image padding mismatch", SliceSuggestionReviewBlocksImagePaddingMismatch),
     ("SliceChatService creates reviewed suggestion", SliceChatServiceCreatesReviewedSuggestion),
+    ("SliceChatService creates reviewed cloud suggestion", SliceChatServiceCreatesReviewedCloudSuggestion),
     ("SliceChatService answers analysis without proposal", SliceChatServiceAnswersAnalysisWithoutProposal)
 };
 
@@ -1233,6 +1234,26 @@ static void SliceChatServiceCreatesReviewedSuggestion()
     Assert.True(response.ProposedSliceData is not null, "Known edit prompts should return a proposed slice.");
     Assert.True(response.Review is not null, "Proposed slices should include deterministic review.");
     Assert.True(response.AssistantMessage.Contains("review", StringComparison.OrdinalIgnoreCase), "Chat response should mention review status.");
+}
+
+static void SliceChatServiceCreatesReviewedCloudSuggestion()
+{
+    var chat = new SliceChatService();
+    var context = new SliceChatContext(
+        TwentyFiveSliceData.CreateDefault(),
+        SourceWidth: 1000d,
+        SourceHeight: 1000d,
+        TargetWidth: 400d,
+        TargetHeight: 400d);
+
+    SliceChatResponse response = chat.FromCloudAdvice(
+        "Use this exact slice: {\"verticalBorders\":[8,40,60,92],\"horizontalBorders\":[8,40,60,92]}",
+        context,
+        "OpenAI / ChatGPT");
+
+    Assert.True(response.ProposedSliceData is not null, "Cloud advice with border JSON should return a proposed slice.");
+    Assert.True(response.Review?.SafeToApply == true, "Cloud proposals should include deterministic review.");
+    Assert.True(response.AssistantMessage.Contains("OpenAI", StringComparison.OrdinalIgnoreCase), "Cloud chat response should name the provider.");
 }
 
 static void SliceChatServiceAnswersAnalysisWithoutProposal()

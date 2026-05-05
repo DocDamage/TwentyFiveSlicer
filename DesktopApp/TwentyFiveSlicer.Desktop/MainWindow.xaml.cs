@@ -272,7 +272,7 @@ public partial class MainWindow : Window
 
     private void SendChat_Click(object sender, RoutedEventArgs e)
     {
-        SendChatMessage();
+        _ = SendChatMessageAsync();
     }
 
     private void PreviewChatProposal_Click(object sender, RoutedEventArgs e)
@@ -668,7 +668,7 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control)
         {
-            SendChatMessage();
+            _ = SendChatMessageAsync();
             e.Handled = true;
         }
     }
@@ -1069,7 +1069,7 @@ public partial class MainWindow : Window
         CandidateComboBox.SelectedIndex = _lastCandidateSuggestions.Count > 0 ? 0 : -1;
     }
 
-    private void SendChatMessage()
+    private async Task SendChatMessageAsync()
     {
         string message = ChatInputBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(message))
@@ -1078,7 +1078,8 @@ public partial class MainWindow : Window
         }
 
         AddChatMessage($"You: {message}");
-        SliceChatResponse response = _chat.Send(message, CreateChatContext());
+        SliceChatContext context = CreateChatContext();
+        SliceChatResponse response = await SendChatToSelectedAssistantAsync(message, context);
         _pendingChatProposal = response.ProposedSliceData;
         _pendingChatReview = response.Review;
         _chatPreviewReturnState = null;
@@ -1092,6 +1093,35 @@ public partial class MainWindow : Window
         AssistantResultText.Text = response.AssistantMessage;
         ChatInputBox.Text = string.Empty;
         SaveAppState();
+    }
+
+    private async Task<SliceChatResponse> SendChatToSelectedAssistantAsync(string message, SliceChatContext context)
+    {
+        if (CloudAiEnabledCheckBox.IsChecked != true)
+        {
+            return _chat.Send(message, context);
+        }
+
+        CloudAiProviderDescriptor? provider = GetSelectedCloudAiProvider();
+        if (provider is null)
+        {
+            return new SliceChatResponse("Choose a cloud AI provider before using cloud chat.", null, null);
+        }
+
+        AddChatMessage($"Assistant: Asking {provider.DisplayName}...");
+        CloudAiResult result = await _cloudAiClient.AskAsync(
+            provider,
+            CreateCloudAiSettings(),
+            BuildCloudChatPrompt(message),
+            CreateCloudAiImageInput(provider));
+
+        if (!result.Success)
+        {
+            SliceChatResponse fallback = _chat.Send(message, context);
+            return new SliceChatResponse($"Cloud AI was unavailable: {result.ErrorMessage}. Local fallback: {fallback.AssistantMessage}", fallback.ProposedSliceData, fallback.Review);
+        }
+
+        return _chat.FromCloudAdvice(result.Advice, context, provider.DisplayName, _sourceImage);
     }
 
     private SliceChatContext CreateChatContext()
@@ -1220,6 +1250,22 @@ public partial class MainWindow : Window
             builder.AppendLine($"User request: {AssistantPromptBox.Text.Trim()}");
         }
 
+        return builder.ToString();
+    }
+
+    private string BuildCloudChatPrompt(string userMessage)
+    {
+        var builder = new StringBuilder();
+        builder.Append(BuildCloudAiPrompt());
+        builder.AppendLine();
+        builder.AppendLine("This request came from the chat panel.");
+        builder.AppendLine("Recent chat:");
+        foreach (string chatMessage in _chatMessages.TakeLast(8))
+        {
+            builder.AppendLine(chatMessage);
+        }
+
+        builder.AppendLine($"Latest user chat request: {userMessage.Trim()}");
         return builder.ToString();
     }
 

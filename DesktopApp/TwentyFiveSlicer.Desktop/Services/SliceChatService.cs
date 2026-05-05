@@ -1,4 +1,5 @@
 using TwentyFiveSlicer.Desktop.Models;
+using System.Windows.Media.Imaging;
 
 namespace TwentyFiveSlicer.Desktop.Services;
 
@@ -49,6 +50,40 @@ public sealed class SliceChatService
         }
 
         return new SliceChatResponse(message, result.SliceData, review);
+    }
+
+    public SliceChatResponse FromCloudAdvice(string advice, SliceChatContext context, string providerName, BitmapSource? image = null)
+    {
+        if (!CloudAiAdviceParser.TryParseSliceData(advice, out TwentyFiveSliceData? proposed) || proposed is null)
+        {
+            return new SliceChatResponse($"{providerName}: {advice}", null, null);
+        }
+
+        SliceSuggestionReview review = image is null
+            ? SliceSuggestionReviewService.Review(
+                context.CurrentSliceData,
+                proposed,
+                context.SourceWidth,
+                context.SourceHeight,
+                context.TargetWidth,
+                context.TargetHeight)
+            : SliceSuggestionReviewService.Review(
+                context.CurrentSliceData,
+                proposed,
+                image,
+                context.TargetWidth,
+                context.TargetHeight);
+        string status = review.SafeToApply
+            ? "The cloud proposal passed deterministic review and is ready to apply."
+            : "The cloud proposal needs review before applying.";
+        string message = $"{providerName}: I found exact border JSON. {status} Score: {review.Score:P0}.";
+
+        if (review.Risks.Count > 0)
+        {
+            message += $" Risk: {review.Risks[0]}";
+        }
+
+        return new SliceChatResponse(message, proposed, review);
     }
 
     private static bool IsAnalysisPrompt(string prompt)
