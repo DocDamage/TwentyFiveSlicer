@@ -235,6 +235,7 @@ Local assistant features:
 
 - Chat-style assistant panel with message history, reviewed proposals, preview, apply, and reject controls.
 - Chat uses local deterministic commands by default and can use the selected cloud AI provider when Cloud AI is enabled.
+- Local chat understands conversational requests such as "the corners are getting warped", "the middle feels too stretched", or "make it behave like a wide CTA button".
 - Chat understands proposal commands such as "preview it", "apply it", "reject it", "explain the risk", and "try a safer version".
 - Detect transparent padding and suggest borders.
 - Analyze the current slice setup for warnings.

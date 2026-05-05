@@ -118,12 +118,13 @@ public sealed class SliceAssistantService
     public SliceAssistantResult Apply(string prompt, TwentyFiveSliceData current)
     {
         string normalizedPrompt = prompt.Trim().ToLowerInvariant();
+        SlicePromptIntents intents = SlicePromptIntents.FromPrompt(normalizedPrompt);
         double[] vertical = TwentyFiveSliceData.NormalizeAxis(current.VerticalBorders);
         double[] horizontal = TwentyFiveSliceData.NormalizeAxis(current.HorizontalBorders);
         bool applied = false;
         var messages = new List<string>();
 
-        if (normalizedPrompt.Contains("thinner corner") || normalizedPrompt.Contains("thin corner"))
+        if (intents.ThinnerCorners)
         {
             vertical[0] = 8d;
             vertical[3] = 92d;
@@ -133,7 +134,7 @@ public sealed class SliceAssistantService
             messages.Add("Reduced the outer fixed corner bands.");
         }
 
-        if (normalizedPrompt.Contains("thicker corner") || normalizedPrompt.Contains("thick corner"))
+        if (intents.ThickerCorners)
         {
             vertical[0] = Math.Max(vertical[0], 18d);
             vertical[3] = Math.Min(vertical[3], 82d);
@@ -143,7 +144,7 @@ public sealed class SliceAssistantService
             messages.Add("Increased the outer fixed corner bands.");
         }
 
-        if (normalizedPrompt.Contains("symmetrize") || normalizedPrompt.Contains("symmetrical") || normalizedPrompt.Contains("symmetric"))
+        if (intents.Symmetrize)
         {
             double horizontalBand = Math.Max(0d, ((vertical[0] + (100d - vertical[3])) / 2d));
             double verticalBand = Math.Max(0d, ((horizontal[0] + (100d - horizontal[3])) / 2d));
@@ -155,7 +156,7 @@ public sealed class SliceAssistantService
             messages.Add("Balanced opposite fixed edge bands.");
         }
 
-        if (normalizedPrompt.Contains("make this a panel") || normalizedPrompt.Contains("optimize panel") || normalizedPrompt.Contains("as panel"))
+        if (intents.Panel)
         {
             vertical[0] = Math.Max(vertical[0], 14d);
             vertical[1] = 34d;
@@ -169,7 +170,7 @@ public sealed class SliceAssistantService
             messages.Add("Optimized the slice as a panel.");
         }
 
-        if (normalizedPrompt.Contains("make this a button") || normalizedPrompt.Contains("optimize button") || normalizedPrompt.Contains("as button"))
+        if (intents.Button)
         {
             vertical[0] = 10d;
             vertical[1] = 42d;
@@ -183,7 +184,7 @@ public sealed class SliceAssistantService
             messages.Add("Optimized the slice as a button.");
         }
 
-        if (normalizedPrompt.Contains("top match bottom") || normalizedPrompt.Contains("top border match"))
+        if (intents.TopMatchBottom)
         {
             double bottomBand = 100d - horizontal[3];
             horizontal[0] = bottomBand;
@@ -191,7 +192,7 @@ public sealed class SliceAssistantService
             messages.Add("Matched the top fixed band to the bottom fixed band.");
         }
 
-        if (normalizedPrompt.Contains("left match right") || normalizedPrompt.Contains("left border match"))
+        if (intents.LeftMatchRight)
         {
             double rightBand = 100d - vertical[3];
             vertical[0] = rightBand;
@@ -199,7 +200,7 @@ public sealed class SliceAssistantService
             messages.Add("Matched the left fixed band to the right fixed band.");
         }
 
-        if (normalizedPrompt.Contains("center stretch") || normalizedPrompt.Contains("center the stretch"))
+        if (intents.CenterStretch)
         {
             vertical[1] = 40d;
             vertical[2] = 60d;
@@ -334,5 +335,42 @@ public sealed class SliceAssistantService
             SliceAssetKind.FrameHeavy => "frame-heavy",
             _ => "general-purpose"
         };
+    }
+
+    private sealed record SlicePromptIntents(
+        bool ThinnerCorners,
+        bool ThickerCorners,
+        bool Symmetrize,
+        bool Panel,
+        bool Button,
+        bool TopMatchBottom,
+        bool LeftMatchRight,
+        bool CenterStretch)
+    {
+        public static SlicePromptIntents FromPrompt(string prompt)
+        {
+            bool mentionsCornerOrCap = HasAny(prompt, "corner", "corners", "cap", "caps", "end cap", "end caps", "edges", "ends");
+            bool wantsMoreProtection = HasAny(prompt, "protect", "protected", "preserve", "keep", "stop", "avoid", "don't mess up", "do not mess up", "warped", "distorted", "deformed", "squished", "crushed", "stretched out");
+            bool wantsLessProtection = HasAny(prompt, "less corner", "smaller corner", "too much border", "too chunky", "too thick", "thin out", "lighter frame");
+            bool balance = HasAny(prompt, "symmetrize", "symmetrical", "symmetric", "balanced", "balance", "even", "match", "line up");
+            bool sides = HasAny(prompt, "left", "right", "side", "sides");
+            bool topBottom = HasAny(prompt, "top", "bottom", "vertical");
+            bool center = HasAny(prompt, "center", "middle", "inner", "inside", "stretch area", "stretch band", "main area");
+
+            return new SlicePromptIntents(
+                ThinnerCorners: HasAny(prompt, "thinner corner", "thin corner") || (mentionsCornerOrCap && wantsLessProtection),
+                ThickerCorners: HasAny(prompt, "thicker corner", "thick corner") || (mentionsCornerOrCap && wantsMoreProtection),
+                Symmetrize: HasAny(prompt, "symmetrize", "symmetrical", "symmetric") || (balance && HasAny(prompt, "edges", "bands", "sides", "left", "right", "top", "bottom")),
+                Panel: HasAny(prompt, "make this a panel", "optimize panel", "as panel", "dialog", "window frame", "frame panel", "large panel", "box background"),
+                Button: HasAny(prompt, "make this a button", "optimize button", "as button", "cta", "call to action", "wide button", "pill button", "menu button", "button"),
+                TopMatchBottom: HasAny(prompt, "top match bottom", "top border match") || (balance && topBottom && !sides),
+                LeftMatchRight: HasAny(prompt, "left match right", "left border match") || (balance && sides),
+                CenterStretch: HasAny(prompt, "center stretch", "center the stretch") || (center && HasAny(prompt, "predictable", "weird", "odd", "bad", "wrong", "too stretched", "stretchy", "stretching", "distort", "distorted", "cleaner", "stable")));
+        }
+
+        private static bool HasAny(string prompt, params string[] phrases)
+        {
+            return phrases.Any(phrase => prompt.Contains(phrase, StringComparison.Ordinal));
+        }
     }
 }

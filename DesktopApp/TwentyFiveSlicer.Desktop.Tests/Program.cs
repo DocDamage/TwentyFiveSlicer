@@ -36,6 +36,7 @@ var tests = new (string Name, Action Test)[]
     ("SliceAssistant returns structured recommendations", SliceAssistantReturnsStructuredRecommendations),
     ("ImageBorderSuggestionService explains confidence", ImageBorderSuggestionServiceExplainsConfidence),
     ("SliceAssistant understands broader prompt intents", SliceAssistantUnderstandsBroaderPromptIntents),
+    ("SliceAssistant understands conversational complaints", SliceAssistantUnderstandsConversationalComplaints),
     ("SliceAssistant ranks candidate presets", SliceAssistantRanksCandidatePresets),
     ("SliceAssistant candidate scoring reflects warnings", SliceAssistantCandidateScoringReflectsWarnings),
     ("SliceAssistant ranks candidates across target sizes", SliceAssistantRanksCandidatesAcrossTargetSizes),
@@ -75,6 +76,7 @@ var tests = new (string Name, Action Test)[]
     ("SliceSuggestionReview blocks image padding mismatch", SliceSuggestionReviewBlocksImagePaddingMismatch),
     ("SliceChatService creates reviewed suggestion", SliceChatServiceCreatesReviewedSuggestion),
     ("SliceChatService creates reviewed cloud suggestion", SliceChatServiceCreatesReviewedCloudSuggestion),
+    ("SliceChatService handles conversational edit request", SliceChatServiceHandlesConversationalEditRequest),
     ("SliceChatService recognizes proposal commands", SliceChatServiceRecognizesProposalCommands),
     ("SliceChatService answers analysis without proposal", SliceChatServiceAnswersAnalysisWithoutProposal)
 };
@@ -521,6 +523,28 @@ static void SliceAssistantUnderstandsBroaderPromptIntents()
     Assert.Equal(result.SliceData.VerticalBorders[0], 100d - result.SliceData.VerticalBorders[3], "Symmetry should match left and right bands.");
     Assert.Equal(result.SliceData.HorizontalBorders[0], 100d - result.SliceData.HorizontalBorders[3], "Symmetry should match top and bottom bands.");
     Assert.True(result.SliceData.VerticalBorders[0] >= 16d, "Thicker corners should increase protected bands.");
+}
+
+static void SliceAssistantUnderstandsConversationalComplaints()
+{
+    var assistant = new SliceAssistantService();
+    var data = new TwentyFiveSliceData([12d, 32d, 68d, 88d], [12d, 32d, 68d, 88d]);
+
+    SliceAssistantResult warpedCorners = assistant.Apply("the corners are getting warped when I resize it, can you protect them better?", data);
+    Assert.True(warpedCorners.Applied, "Conversational corner complaints should be understood.");
+    Assert.True(warpedCorners.SliceData.VerticalBorders[0] > data.VerticalBorders[0], "Protecting corners should thicken outer vertical bands.");
+
+    SliceAssistantResult stretchedMiddle = assistant.Apply("the middle area looks weird and stretched, make the center more predictable", data);
+    Assert.True(stretchedMiddle.Applied, "Conversational center stretch complaints should be understood.");
+    Assert.Equal(40d, stretchedMiddle.SliceData.VerticalBorders[1], "Center stretch intent should set inner vertical guide.");
+
+    SliceAssistantResult wideCta = assistant.Apply("I want this to behave like a wide CTA button without messing up the end caps", data);
+    Assert.True(wideCta.Applied, "Conversational button intent should be understood.");
+    Assert.Equal(10d, wideCta.SliceData.VerticalBorders[0], "Wide CTA intent should use button-fit borders.");
+
+    SliceAssistantResult uneven = assistant.Apply("left and right don't feel even, can you balance the sides?", data);
+    Assert.True(uneven.Applied, "Conversational balance intent should be understood.");
+    Assert.Equal(uneven.SliceData.VerticalBorders[0], 100d - uneven.SliceData.VerticalBorders[3], "Balancing should symmetrize horizontal bands.");
 }
 
 static void SliceAssistantRanksCandidatePresets()
@@ -1255,6 +1279,23 @@ static void SliceChatServiceCreatesReviewedCloudSuggestion()
     Assert.True(response.ProposedSliceData is not null, "Cloud advice with border JSON should return a proposed slice.");
     Assert.True(response.Review?.SafeToApply == true, "Cloud proposals should include deterministic review.");
     Assert.True(response.AssistantMessage.Contains("OpenAI", StringComparison.OrdinalIgnoreCase), "Cloud chat response should name the provider.");
+}
+
+static void SliceChatServiceHandlesConversationalEditRequest()
+{
+    var chat = new SliceChatService();
+    var context = new SliceChatContext(
+        new TwentyFiveSliceData([12d, 32d, 68d, 88d], [12d, 32d, 68d, 88d]),
+        SourceWidth: 1000d,
+        SourceHeight: 1000d,
+        TargetWidth: 400d,
+        TargetHeight: 400d);
+
+    SliceChatResponse response = chat.Send("the middle feels too stretchy and the end caps are getting weird", context);
+
+    Assert.True(response.ProposedSliceData is not null, "Conversational chat edits should create a proposal.");
+    Assert.True(response.Review is not null, "Conversational chat proposals should be reviewed.");
+    Assert.True(response.AssistantMessage.Contains("proposal", StringComparison.OrdinalIgnoreCase), "Conversational chat should talk in proposal terms.");
 }
 
 static void SliceChatServiceRecognizesProposalCommands()
