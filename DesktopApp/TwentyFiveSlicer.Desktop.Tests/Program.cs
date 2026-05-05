@@ -26,6 +26,7 @@ var tests = new (string Name, Action Test)[]
     ("SliceAssistant ranks candidates across target sizes", SliceAssistantRanksCandidatesAcrossTargetSizes),
     ("SliceAssistant aggregate candidates include target coverage", SliceAssistantAggregateCandidatesIncludeTargetCoverage),
     ("AssistantReportFormatter formats candidate summaries", AssistantReportFormatterFormatsCandidateSummaries),
+    ("AssistantReportFormatter formats candidate list without applying", AssistantReportFormatterFormatsCandidateListWithoutApplying),
     ("PreviewTargetCatalog exposes common targets", PreviewTargetCatalogExposesCommonTargets),
     ("AppStateStore round trips last session", AppStateStoreRoundTripsLastSession),
     ("CloudAiProviderCatalog includes common providers", CloudAiProviderCatalogIncludesCommonProviders),
@@ -316,6 +317,21 @@ static void AssistantReportFormatterFormatsCandidateSummaries()
     Assert.True(report.Contains("Applied Button fit", StringComparison.OrdinalIgnoreCase), "Report should name the applied candidate.");
     Assert.True(report.Contains("91", StringComparison.OrdinalIgnoreCase), "Report should include candidate score.");
     Assert.True(report.Contains("Other candidates", StringComparison.OrdinalIgnoreCase), "Report should include alternatives.");
+}
+
+static void AssistantReportFormatterFormatsCandidateListWithoutApplying()
+{
+    var candidates = new[]
+    {
+        new SliceCandidateSuggestion("Button fit", TwentyFiveSliceData.CreateDefault(), 0.91d, ["No validation warnings."]),
+        new SliceCandidateSuggestion("Panel fit", TwentyFiveSliceData.CreateDefault(), 0.72d, ["One warning remains."])
+    };
+
+    string report = AssistantReportFormatter.FormatCandidateList(candidates);
+
+    Assert.True(report.Contains("Top candidate: Button fit", StringComparison.OrdinalIgnoreCase), "Report should name the top candidate.");
+    Assert.True(report.Contains("Select a candidate", StringComparison.OrdinalIgnoreCase), "Report should guide user selection.");
+    Assert.True(!report.Contains("Applied Button fit", StringComparison.OrdinalIgnoreCase), "Candidate list should not imply an apply happened.");
 }
 
 static void PreviewTargetCatalogExposesCommonTargets()

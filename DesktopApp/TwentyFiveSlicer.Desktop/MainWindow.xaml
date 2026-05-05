@@ -297,6 +297,9 @@
                                 <TextBox x:Name="CloudAiEndpointBox"
                                          Margin="0,0,0,10"
                                          Text="" />
+                                <ComboBox x:Name="CandidateComboBox"
+                                          Margin="0,0,0,10"
+                                          DisplayMemberPath="Name" />
                                 <WrapPanel>
                                     <Button Content="Suggest Borders" Style="{StaticResource ActionButtonStyle}" Click="SuggestBorders_Click" />
                                     <Button Content="Analyze" Style="{StaticResource ActionButtonStyle}" Click="AnalyzeAssistant_Click" />
@@ -305,6 +308,8 @@
                                     <Button Content="Apply Top Recommendation" Style="{StaticResource ActionButtonStyle}" Click="ApplyTopRecommendation_Click" />
                                     <Button Content="Find Best Fit" Style="{StaticResource ActionButtonStyle}" Click="FindBestFit_Click" />
                                     <Button Content="Optimize Across Sizes" Style="{StaticResource ActionButtonStyle}" Click="OptimizeAcrossSizes_Click" />
+                                    <Button Content="Preview Candidate" Style="{StaticResource ActionButtonStyle}" Click="PreviewCandidate_Click" />
+                                    <Button Content="Apply Candidate" Style="{StaticResource ActionButtonStyle}" Click="ApplyCandidate_Click" />
                                     <Button Content="Save Preset" Style="{StaticResource ActionButtonStyle}" Click="SaveUserPreset_Click" />
                                     <Button Content="Batch Check" Style="{StaticResource ActionButtonStyle}" Click="BatchCheck_Click" />
                                     <Button Content="Batch Export" Style="{StaticResource ActionButtonStyle}" Click="BatchExport_Click" />

@@ -58,4 +58,28 @@ public static class AssistantReportFormatter
 
         return builder.ToString().Trim();
     }
+
+    public static string FormatCandidateList(IReadOnlyList<SliceCandidateSuggestion> candidates)
+    {
+        if (candidates.Count == 0)
+        {
+            return "No candidate suggestions were generated.";
+        }
+
+        var builder = new StringBuilder();
+        SliceCandidateSuggestion best = candidates[0];
+        builder.AppendLine($"Top candidate: {best.Name} ({best.Score:P0}).");
+        foreach (string reason in best.Reasons)
+        {
+            builder.AppendLine($"- {reason}");
+        }
+
+        builder.AppendLine("Select a candidate, then preview or apply it.");
+        foreach (SliceCandidateSuggestion candidate in candidates.Skip(1).Take(4))
+        {
+            builder.AppendLine($"- {candidate.Name}: {candidate.Score:P0}");
+        }
+
+        return builder.ToString().Trim();
+    }
 }

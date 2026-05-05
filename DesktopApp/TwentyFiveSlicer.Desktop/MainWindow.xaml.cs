@@ -48,6 +48,8 @@ public partial class MainWindow : Window
     private BitmapImage? _sourceImage;
     private string? _imagePath;
     private SliceAssistantAnalysis? _lastAssistantAnalysis;
+    private IReadOnlyList<SliceCandidateSuggestion> _lastCandidateSuggestions = [];
+    private SliceEditorState? _candidatePreviewReturnState;
     private bool _isUpdatingUi;
     private bool _isSyncingTargetSize;
     private bool _isRestoringSession;
@@ -306,16 +308,8 @@ public partial class MainWindow : Window
             TargetHeightSlider.Value,
             new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
 
-        SliceCandidateSuggestion? best = candidates.FirstOrDefault();
-        if (best is null)
-        {
-            AssistantResultText.Text = "No slice candidates were generated.";
-            return;
-        }
-
-        ApplySliceData(best.SliceData);
-        RememberCurrentState();
-        AssistantResultText.Text = AssistantReportFormatter.FormatCandidateSuggestions(candidates);
+        SetCandidateSuggestions(candidates);
+        AssistantResultText.Text = AssistantReportFormatter.FormatCandidateList(candidates);
     }
 
     private void OptimizeAcrossSizes_Click(object sender, RoutedEventArgs e)
@@ -332,17 +326,38 @@ public partial class MainWindow : Window
             PreviewTargetCatalog.GetCommonTargets(),
             new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
 
-        SliceCandidateSuggestion? best = candidates.FirstOrDefault();
-        if (best is null)
+        SetCandidateSuggestions(candidates);
+        AssistantResultText.Text = AssistantReportFormatter.FormatCandidateList(candidates);
+        UpdateBatchResults();
+    }
+
+    private void PreviewCandidate_Click(object sender, RoutedEventArgs e)
+    {
+        SliceCandidateSuggestion? candidate = GetSelectedCandidate();
+        if (candidate is null)
         {
-            AssistantResultText.Text = "No batch optimization candidates were generated.";
+            AssistantResultText.Text = "Generate and select a candidate before previewing.";
             return;
         }
 
-        ApplySliceData(best.SliceData);
+        _candidatePreviewReturnState ??= CreateEditorState();
+        ApplySliceData(candidate.SliceData);
+        AssistantResultText.Text = $"Previewing {candidate.Name}. Use Apply Candidate to keep it, or choose another candidate.";
+    }
+
+    private void ApplyCandidate_Click(object sender, RoutedEventArgs e)
+    {
+        SliceCandidateSuggestion? candidate = GetSelectedCandidate();
+        if (candidate is null)
+        {
+            AssistantResultText.Text = "Generate and select a candidate before applying.";
+            return;
+        }
+
+        ApplySliceData(candidate.SliceData);
         RememberCurrentState();
-        AssistantResultText.Text = AssistantReportFormatter.FormatCandidateSuggestions(candidates);
-        UpdateBatchResults();
+        _candidatePreviewReturnState = null;
+        AssistantResultText.Text = AssistantReportFormatter.FormatCandidateSuggestions(_lastCandidateSuggestions);
     }
 
     private void SaveUserPreset_Click(object sender, RoutedEventArgs e)
@@ -880,6 +895,21 @@ public partial class MainWindow : Window
         PresetComboBox.ItemsSource = _presetLibrary.Keys.OrderBy(key => key).ToArray();
         PresetComboBox.SelectedItem = selectedPreset;
         _isUpdatingUi = false;
+    }
+
+    private void SetCandidateSuggestions(IReadOnlyList<SliceCandidateSuggestion> candidates)
+    {
+        _lastCandidateSuggestions = candidates;
+        _candidatePreviewReturnState = null;
+        CandidateComboBox.ItemsSource = null;
+        CandidateComboBox.ItemsSource = _lastCandidateSuggestions;
+        CandidateComboBox.SelectedIndex = _lastCandidateSuggestions.Count > 0 ? 0 : -1;
+    }
+
+    private SliceCandidateSuggestion? GetSelectedCandidate()
+    {
+        return CandidateComboBox.SelectedItem as SliceCandidateSuggestion ??
+            _lastCandidateSuggestions.FirstOrDefault();
     }
 
     private void LoadAppState()
