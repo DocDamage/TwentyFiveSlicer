@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -15,6 +16,8 @@ var tests = new (string Name, Action Test)[]
     ("Layout calculator scales fixed regions when target is too small", LayoutCalculatorScalesFixedRegionsWhenTargetIsTooSmall),
     ("Layout calculator flips source regions without moving destinations", LayoutCalculatorFlipsSourceRegionsWithoutMovingDestinations),
     ("Preview control renders export bitmap", PreviewControlRendersExportBitmap),
+    ("Preview control export bitmap encodes as PNG", PreviewControlExportBitmapEncodesAsPng),
+    ("Slice data JSON stays Unity compatible", SliceDataJsonStaysUnityCompatible),
     ("SliceValidation warns when fixed columns exceed target width", SliceValidationWarnsWhenFixedColumnsExceedTargetWidth),
     ("RecentFileList keeps newest unique files first", RecentFileListKeepsNewestUniqueFilesFirst),
     ("BatchPreviewAnalyzer returns warnings per target", BatchPreviewAnalyzerReturnsWarningsPerTarget),
@@ -181,6 +184,42 @@ static void PreviewControlRendersExportBitmap()
         Assert.Equal(48, bitmap.PixelHeight, "Export bitmap should use target height.");
         Assert.True(BitmapHasVisiblePixels(bitmap), "Export bitmap should contain rendered pixels.");
     });
+}
+
+static void PreviewControlExportBitmapEncodesAsPng()
+{
+    RunOnStaThread(() =>
+    {
+        var preview = new TwentyFiveSlicePreviewControl
+        {
+            SourceImage = CreateTransparentPaddingBitmap(16, 16, 0, 0, 0, 0),
+            SliceData = new TwentyFiveSliceData([25d, 40d, 60d, 75d], [25d, 40d, 60d, 75d]),
+            TargetWidth = 64d,
+            TargetHeight = 48d
+        };
+
+        BitmapSource bitmap = preview.RenderOutputBitmap();
+        byte[] pngBytes = EncodePng(bitmap);
+        BitmapFrame decoded = BitmapFrame.Create(new MemoryStream(pngBytes), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+
+        Assert.True(IsPng(pngBytes), "Export encoder should produce a PNG file signature.");
+        Assert.Equal(64, decoded.PixelWidth, "Encoded PNG should preserve target width.");
+        Assert.Equal(48, decoded.PixelHeight, "Encoded PNG should preserve target height.");
+    });
+}
+
+static void SliceDataJsonStaysUnityCompatible()
+{
+    var data = new TwentyFiveSliceData([12d, 42d, 58d, 88d], [10d, 40d, 60d, 90d]);
+
+    string json = JsonSerializer.Serialize(data);
+    TwentyFiveSliceData? loaded = JsonSerializer.Deserialize<TwentyFiveSliceData>(json);
+
+    Assert.True(json.Contains("\"verticalBorders\""), "Standalone JSON should use the Unity runtime verticalBorders field name.");
+    Assert.True(json.Contains("\"horizontalBorders\""), "Standalone JSON should use the Unity runtime horizontalBorders field name.");
+    Assert.True(loaded is not null, "Standalone JSON should deserialize back into slice data.");
+    Assert.SequenceEqual(data.VerticalBorders, loaded!.VerticalBorders);
+    Assert.SequenceEqual(data.HorizontalBorders, loaded.HorizontalBorders);
 }
 
 static void SliceValidationWarnsWhenFixedColumnsExceedTargetWidth()
@@ -868,6 +907,22 @@ static bool BitmapHasVisiblePixels(BitmapSource bitmap)
     }
 
     return false;
+}
+
+static byte[] EncodePng(BitmapSource bitmap)
+{
+    var encoder = new PngBitmapEncoder();
+    encoder.Frames.Add(BitmapFrame.Create(bitmap));
+    using var stream = new MemoryStream();
+    encoder.Save(stream);
+    return stream.ToArray();
+}
+
+static bool IsPng(byte[] bytes)
+{
+    byte[] signature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    return bytes.Length >= signature.Length &&
+        signature.SequenceEqual(bytes.Take(signature.Length));
 }
 
 static void RunOnStaThread(Action action)
