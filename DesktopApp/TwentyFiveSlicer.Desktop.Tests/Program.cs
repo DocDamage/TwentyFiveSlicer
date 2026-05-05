@@ -24,7 +24,8 @@ var tests = new (string Name, Action Test)[]
     ("SliceAssistant ranks candidates across target sizes", SliceAssistantRanksCandidatesAcrossTargetSizes),
     ("SliceAssistant aggregate candidates include target coverage", SliceAssistantAggregateCandidatesIncludeTargetCoverage),
     ("AssistantReportFormatter formats candidate summaries", AssistantReportFormatterFormatsCandidateSummaries),
-    ("PreviewTargetCatalog exposes common targets", PreviewTargetCatalogExposesCommonTargets)
+    ("PreviewTargetCatalog exposes common targets", PreviewTargetCatalogExposesCommonTargets),
+    ("AppStateStore round trips last session", AppStateStoreRoundTripsLastSession)
 };
 
 int failures = 0;
@@ -317,6 +318,50 @@ static void PreviewTargetCatalogExposesCommonTargets()
     Assert.True(targets.Count >= 4, "Catalog should expose multiple common preview targets.");
     Assert.True(targets.Any(target => target.Name.Contains("square", StringComparison.OrdinalIgnoreCase)), "Catalog should include square targets.");
     Assert.True(targets.Any(target => target.Width == 1920d && target.Height == 1080d), "Catalog should include 1080p target.");
+}
+
+static void AppStateStoreRoundTripsLastSession()
+{
+    string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.json");
+    var store = new AppStateStore(path);
+    var state = new DesktopAppState
+    {
+        LastSession = new DesktopSessionState
+        {
+            ImagePath = @"C:\art\button.png",
+            SliceData = new TwentyFiveSliceData([12d, 40d, 60d, 88d], [10d, 42d, 58d, 90d]),
+            TargetWidth = 1024d,
+            TargetHeight = 128d,
+            KeepAspect = true,
+            DebugOverlay = true,
+            ExportDebug = true,
+            SourceGuides = true,
+            FlipX = true,
+            FlipY = false,
+            AssistantOutput = "Best fit: Button"
+        }
+    };
+
+    try
+    {
+        store.Save(state);
+        DesktopAppState loaded = store.Load();
+
+        Assert.True(loaded.LastSession is not null, "Last session should round trip.");
+        DesktopSessionState session = loaded.LastSession!;
+        Assert.Equal(@"C:\art\button.png", session.ImagePath, "Image path should round trip.");
+        Assert.Equal(1024d, session.TargetWidth, "Target width should round trip.");
+        Assert.Equal(true, session.KeepAspect, "Toggle state should round trip.");
+        Assert.Equal(88d, session.SliceData.VerticalBorders[3], "Slice data should round trip.");
+        Assert.Equal("Best fit: Button", session.AssistantOutput, "Assistant output should round trip.");
+    }
+    finally
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
 }
 
 static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int left, int right, int top, int bottom)

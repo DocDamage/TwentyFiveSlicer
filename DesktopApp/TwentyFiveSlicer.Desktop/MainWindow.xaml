@@ -14,7 +14,9 @@
         FontFamily="Bahnschrift"
         AllowDrop="True"
         DragOver="Window_DragOver"
-        Drop="Window_Drop">
+        Drop="Window_Drop"
+        KeyDown="Window_KeyDown"
+        Closing="Window_Closing">
     <Window.Resources>
         <SolidColorBrush x:Key="PanelBrush" Color="#D9152026" />
         <SolidColorBrush x:Key="CardBrush" Color="#A61B272E" />

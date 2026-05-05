@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Text.Json;
+using System.ComponentModel;
 using Microsoft.Win32;
 using TwentyFiveSlicer.Desktop.Models;
 using TwentyFiveSlicer.Desktop.Services;
@@ -48,6 +49,7 @@ public partial class MainWindow : Window
     private SliceAssistantAnalysis? _lastAssistantAnalysis;
     private bool _isUpdatingUi;
     private bool _isSyncingTargetSize;
+    private bool _isRestoringSession;
 
     public MainWindow()
     {
@@ -557,6 +559,43 @@ public partial class MainWindow : Window
         }
     }
 
+    private void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case Key.O:
+                OpenImage_Click(sender, e);
+                e.Handled = true;
+                break;
+            case Key.S:
+                SavePreset_Click(sender, e);
+                e.Handled = true;
+                break;
+            case Key.Z:
+                Undo_Click(sender, e);
+                e.Handled = true;
+                break;
+            case Key.Y:
+                Redo_Click(sender, e);
+                e.Handled = true;
+                break;
+            case Key.E:
+                ExportPreview_Click(sender, e);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    private void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        SaveAppState();
+    }
+
     private void LoadImage(string filePath)
     {
         var bitmap = new BitmapImage();
@@ -573,7 +612,10 @@ public partial class MainWindow : Window
         ImageSizeText.Text = $"{bitmap.PixelWidth} x {bitmap.PixelHeight} px";
         _recentFiles.Add(filePath);
         UpdateRecentFilesUi();
-        SaveAppState();
+        if (!_isRestoringSession)
+        {
+            SaveAppState();
+        }
 
         ConfigureTargetSize(bitmap.PixelWidth, bitmap.PixelHeight);
         _history?.Reset(CreateEditorState());
@@ -823,13 +865,18 @@ public partial class MainWindow : Window
         }
 
         UpdateRecentFilesUi();
+        if (state.LastSession is not null)
+        {
+            ApplySessionState(state.LastSession);
+        }
     }
 
     private void SaveAppState()
     {
         var state = new DesktopAppState
         {
-            RecentFiles = _recentFiles.Files.ToList()
+            RecentFiles = _recentFiles.Files.ToList(),
+            LastSession = CreateSessionState()
         };
 
         foreach ((string name, TwentyFiveSliceData data) in _presetLibrary.Where(pair => pair.Key.StartsWith("User:", StringComparison.OrdinalIgnoreCase)))
@@ -838,6 +885,63 @@ public partial class MainWindow : Window
         }
 
         _appStateStore.Save(state);
+    }
+
+    private DesktopSessionState CreateSessionState()
+    {
+        return new DesktopSessionState
+        {
+            ImagePath = _imagePath,
+            SliceData = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+            TargetWidth = TargetWidthSlider.Value,
+            TargetHeight = TargetHeightSlider.Value,
+            KeepAspect = KeepAspectCheckBox.IsChecked == true,
+            DebugOverlay = DebuggingViewCheckBox.IsChecked == true,
+            ExportDebug = ExportDebugCheckBox.IsChecked == true,
+            SourceGuides = SourceComparisonCheckBox.IsChecked == true,
+            FlipX = FlipXCheckBox.IsChecked == true,
+            FlipY = FlipYCheckBox.IsChecked == true,
+            AssistantOutput = AssistantResultText.Text
+        };
+    }
+
+    private void ApplySessionState(DesktopSessionState session)
+    {
+        _isRestoringSession = true;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(session.ImagePath) && File.Exists(session.ImagePath))
+            {
+                LoadImage(session.ImagePath);
+            }
+
+            ApplySliceData(session.SliceData);
+
+            _isUpdatingUi = true;
+            KeepAspectCheckBox.IsChecked = session.KeepAspect;
+            DebuggingViewCheckBox.IsChecked = session.DebugOverlay;
+            ExportDebugCheckBox.IsChecked = session.ExportDebug;
+            SourceComparisonCheckBox.IsChecked = session.SourceGuides;
+            FlipXCheckBox.IsChecked = session.FlipX;
+            FlipYCheckBox.IsChecked = session.FlipY;
+            _isUpdatingUi = false;
+
+            SetTargetSize(session.TargetWidth, session.TargetHeight);
+
+            if (!string.IsNullOrWhiteSpace(session.AssistantOutput))
+            {
+                AssistantResultText.Text = session.AssistantOutput;
+            }
+        }
+        catch (Exception exception)
+        {
+            PreviewHintText.Text = $"Unable to restore the last session: {exception.Message}";
+        }
+        finally
+        {
+            _isUpdatingUi = false;
+            _isRestoringSession = false;
+        }
     }
 
     private void UpdateValidation()
