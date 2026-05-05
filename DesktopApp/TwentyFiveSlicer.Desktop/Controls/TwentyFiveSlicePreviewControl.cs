@@ -33,8 +33,8 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     private bool _guideEditingEnabled = true;
     private bool _showSourceGuides;
     private Rect _lastPreviewRect;
-    private int _activeGuideIndex = -1;
-    private bool _activeGuideIsVertical;
+    private int _activeVerticalGuideIndex = -1;
+    private int _activeHorizontalGuideIndex = -1;
 
     public event EventHandler<SliceGuideEditEventArgs>? GuideEditChanged;
     public event EventHandler<double>? PreviewZoomChanged;
@@ -248,17 +248,17 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         }
 
         Point point = e.GetPosition(this);
-        (bool found, bool isVertical, int index) = HitTestGuide(point);
-        if (!found)
+        SliceGuideHit hit = HitTestGuide(point);
+        if (hit.Kind == SliceGuideHitKind.None)
         {
             return;
         }
 
-        _activeGuideIsVertical = isVertical;
-        _activeGuideIndex = index;
+        _activeVerticalGuideIndex = hit.VerticalIndex;
+        _activeHorizontalGuideIndex = hit.HorizontalIndex;
         CaptureMouse();
-        Cursor = isVertical ? System.Windows.Input.Cursors.SizeWE : System.Windows.Input.Cursors.SizeNS;
-        UpdateActiveGuide(point, isFinal: false);
+        Cursor = GetCursor(hit);
+        UpdateActiveGuides(point, isFinal: false);
         e.Handled = true;
     }
 
@@ -267,29 +267,27 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         base.OnMouseMove(e);
         Point point = e.GetPosition(this);
 
-        if (_activeGuideIndex >= 0 && IsMouseCaptured)
+        if (HasActiveGuide() && IsMouseCaptured)
         {
-            UpdateActiveGuide(point, isFinal: false);
+            UpdateActiveGuides(point, isFinal: false);
             e.Handled = true;
             return;
         }
 
-        (bool found, bool isVertical, _) = HitTestGuide(point);
-        Cursor = found
-            ? isVertical ? System.Windows.Input.Cursors.SizeWE : System.Windows.Input.Cursors.SizeNS
-            : null;
+        Cursor = GetCursor(HitTestGuide(point));
     }
 
     protected override void OnMouseUp(System.Windows.Input.MouseButtonEventArgs e)
     {
         base.OnMouseUp(e);
-        if (_activeGuideIndex < 0)
+        if (!HasActiveGuide())
         {
             return;
         }
 
-        UpdateActiveGuide(e.GetPosition(this), isFinal: true);
-        _activeGuideIndex = -1;
+        UpdateActiveGuides(e.GetPosition(this), isFinal: true);
+        _activeVerticalGuideIndex = -1;
+        _activeHorizontalGuideIndex = -1;
         ReleaseMouseCapture();
         Cursor = null;
         e.Handled = true;
@@ -312,59 +310,64 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         for (int index = 0; index < 4; index++)
         {
             double x = previewRect.X + (previewRect.Width * SliceData.VerticalBorders[index] / 100d);
-            Pen pen = _activeGuideIndex == index && _activeGuideIsVertical ? ActiveGuidePen : GuidePen;
+            Pen pen = _activeVerticalGuideIndex == index ? ActiveGuidePen : GuidePen;
             drawingContext.DrawRectangle(GuideHitBrush, null, new Rect(x - 3d, previewRect.Y, 6d, previewRect.Height));
             drawingContext.DrawLine(pen, new Point(x, previewRect.Y), new Point(x, previewRect.Bottom));
 
             double y = previewRect.Y + (previewRect.Height * SliceData.HorizontalBorders[index] / 100d);
-            pen = _activeGuideIndex == index && !_activeGuideIsVertical ? ActiveGuidePen : GuidePen;
+            pen = _activeHorizontalGuideIndex == index ? ActiveGuidePen : GuidePen;
             drawingContext.DrawRectangle(GuideHitBrush, null, new Rect(previewRect.X, y - 3d, previewRect.Width, 6d));
             drawingContext.DrawLine(pen, new Point(previewRect.X, y), new Point(previewRect.Right, y));
         }
     }
 
-    private (bool Found, bool IsVertical, int Index) HitTestGuide(Point point)
+    private SliceGuideHit HitTestGuide(Point point)
     {
-        if (!GuideEditingEnabled || _lastPreviewRect.IsEmpty || !_lastPreviewRect.Contains(point))
-        {
-            return (false, false, -1);
-        }
-
-        const double threshold = 9d;
-        for (int index = 0; index < 4; index++)
-        {
-            double x = _lastPreviewRect.X + (_lastPreviewRect.Width * SliceData.VerticalBorders[index] / 100d);
-            if (Math.Abs(point.X - x) <= threshold)
-            {
-                return (true, true, index);
-            }
-
-            double y = _lastPreviewRect.Y + (_lastPreviewRect.Height * SliceData.HorizontalBorders[index] / 100d);
-            if (Math.Abs(point.Y - y) <= threshold)
-            {
-                return (true, false, index);
-            }
-        }
-
-        return (false, false, -1);
+        return GuideEditingEnabled
+            ? SliceGuideInteraction.HitTest(_lastPreviewRect, SliceData, point)
+            : SliceGuideHit.None;
     }
 
-    private void UpdateActiveGuide(Point point, bool isFinal)
+    private void UpdateActiveGuides(Point point, bool isFinal)
     {
-        if (_activeGuideIndex < 0 || _lastPreviewRect.IsEmpty)
+        if (!HasActiveGuide() || _lastPreviewRect.IsEmpty)
         {
             return;
         }
 
-        double percent = _activeGuideIsVertical
-            ? ((point.X - _lastPreviewRect.X) / _lastPreviewRect.Width) * 100d
-            : ((point.Y - _lastPreviewRect.Y) / _lastPreviewRect.Height) * 100d;
+        if (_activeVerticalGuideIndex >= 0)
+        {
+            GuideEditChanged?.Invoke(this, new SliceGuideEditEventArgs(
+                true,
+                _activeVerticalGuideIndex,
+                SliceGuideInteraction.ToVerticalPercent(_lastPreviewRect, point),
+                isFinal));
+        }
 
-        GuideEditChanged?.Invoke(this, new SliceGuideEditEventArgs(
-            _activeGuideIsVertical,
-            _activeGuideIndex,
-            Math.Clamp(percent, 0d, 100d),
-            isFinal));
+        if (_activeHorizontalGuideIndex >= 0)
+        {
+            GuideEditChanged?.Invoke(this, new SliceGuideEditEventArgs(
+                false,
+                _activeHorizontalGuideIndex,
+                SliceGuideInteraction.ToHorizontalPercent(_lastPreviewRect, point),
+                isFinal));
+        }
+    }
+
+    private bool HasActiveGuide()
+    {
+        return _activeVerticalGuideIndex >= 0 || _activeHorizontalGuideIndex >= 0;
+    }
+
+    private static System.Windows.Input.Cursor? GetCursor(SliceGuideHit hit)
+    {
+        return hit.Kind switch
+        {
+            SliceGuideHitKind.Intersection => System.Windows.Input.Cursors.SizeAll,
+            SliceGuideHitKind.Vertical => System.Windows.Input.Cursors.SizeWE,
+            SliceGuideHitKind.Horizontal => System.Windows.Input.Cursors.SizeNS,
+            _ => null
+        };
     }
 
     private void DrawSlicedImage(DrawingContext drawingContext, Rect outputRect, double scale, bool includeDebugOverlay, bool includeOutlines)

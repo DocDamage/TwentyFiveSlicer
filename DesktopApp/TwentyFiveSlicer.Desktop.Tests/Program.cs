@@ -20,6 +20,8 @@ var tests = new (string Name, Action Test)[]
     ("Preview control clamps zoom", PreviewControlClampsZoomValue),
     ("Preview control adjusts zoom from mouse wheel", PreviewControlAdjustsZoomFromMouseWheel),
     ("Preview control resets zoom", PreviewControlResetsZoomValue),
+    ("SliceGuideInteraction detects intersection before single guides", SliceGuideInteractionDetectsIntersectionBeforeSingleGuides),
+    ("SliceGuideInteraction converts point to guide percent", SliceGuideInteractionConvertsPointToGuidePercent),
     ("Slice data JSON stays Unity compatible", SliceDataJsonStaysUnityCompatible),
     ("SliceValidation warns when fixed columns exceed target width", SliceValidationWarnsWhenFixedColumnsExceedTargetWidth),
     ("RecentFileList keeps newest unique files first", RecentFileListKeepsNewestUniqueFilesFirst),
@@ -258,6 +260,28 @@ static void PreviewControlResetsZoomValue()
 
         Assert.Equal(1d, preview.PreviewZoom, "Reset should restore 100% preview zoom.");
     });
+}
+
+static void SliceGuideInteractionDetectsIntersectionBeforeSingleGuides()
+{
+    var previewRect = new Rect(10d, 20d, 200d, 100d);
+    var data = new TwentyFiveSliceData([25d, 50d, 75d, 90d], [20d, 50d, 80d, 90d]);
+
+    SliceGuideHit hit = SliceGuideInteraction.HitTest(previewRect, data, new Point(110d, 70d));
+
+    Assert.Equal(SliceGuideHitKind.Intersection, hit.Kind, "A point near both guide axes should select an intersection handle.");
+    Assert.Equal(1, hit.VerticalIndex, "Intersection hit should preserve vertical guide index.");
+    Assert.Equal(1, hit.HorizontalIndex, "Intersection hit should preserve horizontal guide index.");
+}
+
+static void SliceGuideInteractionConvertsPointToGuidePercent()
+{
+    var previewRect = new Rect(10d, 20d, 200d, 100d);
+
+    Assert.Equal(50d, SliceGuideInteraction.ToVerticalPercent(previewRect, new Point(110d, 90d)), "Vertical percent should be measured from preview left.");
+    Assert.Equal(25d, SliceGuideInteraction.ToHorizontalPercent(previewRect, new Point(160d, 45d)), "Horizontal percent should be measured from preview top.");
+    Assert.Equal(100d, SliceGuideInteraction.ToVerticalPercent(previewRect, new Point(500d, 90d)), "Vertical percent should clamp to 100.");
+    Assert.Equal(0d, SliceGuideInteraction.ToHorizontalPercent(previewRect, new Point(160d, -20d)), "Horizontal percent should clamp to 0.");
 }
 
 static void SliceDataJsonStaysUnityCompatible()
