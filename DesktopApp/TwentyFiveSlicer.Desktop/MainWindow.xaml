@@ -11,7 +11,10 @@
         MinHeight="760"
         MinWidth="1220"
         WindowStartupLocation="CenterScreen"
-        FontFamily="Bahnschrift">
+        FontFamily="Bahnschrift"
+        AllowDrop="True"
+        DragOver="Window_DragOver"
+        Drop="Window_Drop">
     <Window.Resources>
         <SolidColorBrush x:Key="PanelBrush" Color="#D9152026" />
         <SolidColorBrush x:Key="CardBrush" Color="#A61B272E" />
@@ -112,7 +115,11 @@
                         <Button Content="Open Image" Style="{StaticResource ActionButtonStyle}" Click="OpenImage_Click" />
                         <Button Content="Load JSON" Style="{StaticResource ActionButtonStyle}" Click="LoadPreset_Click" />
                         <Button Content="Save JSON" Style="{StaticResource ActionButtonStyle}" Click="SavePreset_Click" />
+                        <Button Content="Copy JSON" Style="{StaticResource ActionButtonStyle}" Click="CopyPreset_Click" />
+                        <Button Content="Export PNG" Style="{StaticResource ActionButtonStyle}" Click="ExportPreview_Click" />
                         <Button Content="Reset Borders" Style="{StaticResource ActionButtonStyle}" Click="ResetBorders_Click" />
+                        <Button Content="Undo" Style="{StaticResource ActionButtonStyle}" Click="Undo_Click" />
+                        <Button Content="Redo" Style="{StaticResource ActionButtonStyle}" Click="Redo_Click" />
                     </WrapPanel>
                 </StackPanel>
 
@@ -136,6 +143,9 @@
                                            Margin="0,6,0,0"
                                            Foreground="{StaticResource MutedTextBrush}"
                                            Text="Open a PNG, JPG, BMP, or GIF to begin." />
+                                <ComboBox x:Name="RecentFilesComboBox"
+                                          Margin="0,12,0,0"
+                                          SelectionChanged="RecentFilesComboBox_SelectionChanged" />
                             </StackPanel>
                         </Border>
 
@@ -150,6 +160,25 @@
                                 <TextBlock Margin="0,8,0,0"
                                            Foreground="{StaticResource MutedTextBrush}"
                                            Text="The preview uses the same fixed and stretchable column layout as the Unity runtime." />
+
+                                <WrapPanel Margin="0,14,0,0">
+                                    <Button Content="Source Size"
+                                            Style="{StaticResource ActionButtonStyle}"
+                                            Tag="Source"
+                                            Click="PreviewSizePreset_Click" />
+                                    <Button Content="512 x 512"
+                                            Style="{StaticResource ActionButtonStyle}"
+                                            Tag="512x512"
+                                            Click="PreviewSizePreset_Click" />
+                                    <Button Content="1024 x 512"
+                                            Style="{StaticResource ActionButtonStyle}"
+                                            Tag="1024x512"
+                                            Click="PreviewSizePreset_Click" />
+                                    <Button Content="1920 x 1080"
+                                            Style="{StaticResource ActionButtonStyle}"
+                                            Tag="1920x1080"
+                                            Click="PreviewSizePreset_Click" />
+                                </WrapPanel>
 
                                 <Grid Margin="0,14,0,0">
                                     <Grid.RowDefinitions>
@@ -199,8 +228,21 @@
                                 </Grid>
 
                                 <WrapPanel Margin="0,16,0,0">
+                                    <CheckBox x:Name="KeepAspectCheckBox"
+                                              Content="Lock aspect"
+                                              Style="{StaticResource ToggleStyle}"
+                                              Checked="KeepAspectChanged"
+                                              Unchecked="KeepAspectChanged" />
                                     <CheckBox x:Name="DebuggingViewCheckBox"
                                               Content="Debug overlay"
+                                              Style="{StaticResource ToggleStyle}"
+                                              Checked="PreviewSettingChanged"
+                                              Unchecked="PreviewSettingChanged" />
+                                    <CheckBox x:Name="ExportDebugCheckBox"
+                                              Content="Export debug"
+                                              Style="{StaticResource ToggleStyle}" />
+                                    <CheckBox x:Name="SourceComparisonCheckBox"
+                                              Content="Source guides"
                                               Style="{StaticResource ToggleStyle}"
                                               Checked="PreviewSettingChanged"
                                               Unchecked="PreviewSettingChanged" />
@@ -215,6 +257,59 @@
                                               Checked="PreviewSettingChanged"
                                               Unchecked="PreviewSettingChanged" />
                                 </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource CardStyle}"
+                                Background="{StaticResource CardBrush}"
+                                Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="Assistant"
+                                           Foreground="{StaticResource TextBrush}"
+                                           FontSize="18"
+                                           FontWeight="SemiBold" />
+                                <TextBox x:Name="AssistantPromptBox"
+                                         Margin="0,12,0,10"
+                                         MinHeight="58"
+                                         TextWrapping="Wrap"
+                                         AcceptsReturn="True"
+                                         Text="make top match bottom and thinner corners" />
+                                <ComboBox x:Name="PresetComboBox"
+                                          Margin="0,0,0,10"
+                                          SelectionChanged="PresetComboBox_SelectionChanged" />
+                                <WrapPanel>
+                                    <Button Content="Suggest Borders" Style="{StaticResource ActionButtonStyle}" Click="SuggestBorders_Click" />
+                                    <Button Content="Apply Prompt" Style="{StaticResource ActionButtonStyle}" Click="ApplyAssistantPrompt_Click" />
+                                    <Button Content="Optimize Button" Style="{StaticResource ActionButtonStyle}" Click="OptimizeButton_Click" />
+                                    <Button Content="Batch Check" Style="{StaticResource ActionButtonStyle}" Click="BatchCheck_Click" />
+                                    <Button Content="Batch Export" Style="{StaticResource ActionButtonStyle}" Click="BatchExport_Click" />
+                                </WrapPanel>
+                                <TextBlock x:Name="AssistantResultText"
+                                           Margin="0,8,0,0"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="Local assistant uses image transparency, validation, and known slice-edit commands." />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource CardStyle}"
+                                Background="{StaticResource CardBrush}"
+                                Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="Checks"
+                                           Foreground="{StaticResource TextBrush}"
+                                           FontSize="18"
+                                           FontWeight="SemiBold" />
+                                <TextBlock x:Name="ValidationText"
+                                           Margin="0,10,0,0"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="Load an image to validate this slice." />
+                                <TextBlock x:Name="BatchResultsText"
+                                           Margin="0,10,0,0"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="Batch checks will test common target sizes." />
                             </StackPanel>
                         </Border>
 
@@ -240,24 +335,29 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="88" />
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="62" />
+                                        <ColumnDefinition Width="116" />
+                                        <ColumnDefinition Width="72" />
                                     </Grid.ColumnDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Left 1" Style="{StaticResource LabelStyle}" VerticalAlignment="Center" />
                                     <Slider x:Name="Vertical1Slider" Grid.Row="0" Grid.Column="1" Tag="V0" Minimum="0" Maximum="100" Value="20" Foreground="{StaticResource AccentBrush}" ValueChanged="BorderSliderChanged" />
                                     <TextBlock x:Name="Vertical1ValueText" Grid.Row="0" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ValueStyle}" Text="20%" />
+                                    <TextBox x:Name="Vertical1TextBox" Grid.Row="0" Grid.Column="3" Tag="V0" Margin="8,0,0,6" LostFocus="BorderTextBoxCommitted" KeyDown="BorderTextBox_KeyDown" Text="20" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="Left 2" Style="{StaticResource LabelStyle}" VerticalAlignment="Center" />
                                     <Slider x:Name="Vertical2Slider" Grid.Row="1" Grid.Column="1" Tag="V1" Minimum="0" Maximum="100" Value="40" Foreground="{StaticResource AccentBrush}" ValueChanged="BorderSliderChanged" />
                                     <TextBlock x:Name="Vertical2ValueText" Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ValueStyle}" Text="40%" />
+                                    <TextBox x:Name="Vertical2TextBox" Grid.Row="1" Grid.Column="3" Tag="V1" Margin="8,0,0,6" LostFocus="BorderTextBoxCommitted" KeyDown="BorderTextBox_KeyDown" Text="40" />
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="Left 3" Style="{StaticResource LabelStyle}" VerticalAlignment="Center" />
                                     <Slider x:Name="Vertical3Slider" Grid.Row="2" Grid.Column="1" Tag="V2" Minimum="0" Maximum="100" Value="60" Foreground="{StaticResource AccentBrush}" ValueChanged="BorderSliderChanged" />
                                     <TextBlock x:Name="Vertical3ValueText" Grid.Row="2" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ValueStyle}" Text="60%" />
+                                    <TextBox x:Name="Vertical3TextBox" Grid.Row="2" Grid.Column="3" Tag="V2" Margin="8,0,0,6" LostFocus="BorderTextBoxCommitted" KeyDown="BorderTextBox_KeyDown" Text="60" />
 
                                     <TextBlock Grid.Row="3" Grid.Column="0" Text="Left 4" Style="{StaticResource LabelStyle}" VerticalAlignment="Center" />
                                     <Slider x:Name="Vertical4Slider" Grid.Row="3" Grid.Column="1" Tag="V3" Minimum="0" Maximum="100" Value="80" Foreground="{StaticResource AccentBrush}" ValueChanged="BorderSliderChanged" />
                                     <TextBlock x:Name="Vertical4ValueText" Grid.Row="3" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ValueStyle}" Text="80%" />
+                                    <TextBox x:Name="Vertical4TextBox" Grid.Row="3" Grid.Column="3" Tag="V3" Margin="8,0,0,6" LostFocus="BorderTextBoxCommitted" KeyDown="BorderTextBox_KeyDown" Text="80" />
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -283,24 +383,29 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="88" />
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="62" />
+                                        <ColumnDefinition Width="116" />
+                                        <ColumnDefinition Width="72" />
                                     </Grid.ColumnDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Top 1" Style="{StaticResource LabelStyle}" VerticalAlignment="Center" />
                                     <Slider x:Name="Horizontal1Slider" Grid.Row="0" Grid.Column="1" Tag="H0" Minimum="0" Maximum="100" Value="20" Foreground="{StaticResource AccentBrush}" ValueChanged="BorderSliderChanged" />
                                     <TextBlock x:Name="Horizontal1ValueText" Grid.Row="0" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ValueStyle}" Text="20%" />
+                                    <TextBox x:Name="Horizontal1TextBox" Grid.Row="0" Grid.Column="3" Tag="H0" Margin="8,0,0,6" LostFocus="BorderTextBoxCommitted" KeyDown="BorderTextBox_KeyDown" Text="20" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="Top 2" Style="{StaticResource LabelStyle}" VerticalAlignment="Center" />
                                     <Slider x:Name="Horizontal2Slider" Grid.Row="1" Grid.Column="1" Tag="H1" Minimum="0" Maximum="100" Value="40" Foreground="{StaticResource AccentBrush}" ValueChanged="BorderSliderChanged" />
                                     <TextBlock x:Name="Horizontal2ValueText" Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ValueStyle}" Text="40%" />
+                                    <TextBox x:Name="Horizontal2TextBox" Grid.Row="1" Grid.Column="3" Tag="H1" Margin="8,0,0,6" LostFocus="BorderTextBoxCommitted" KeyDown="BorderTextBox_KeyDown" Text="40" />
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="Top 3" Style="{StaticResource LabelStyle}" VerticalAlignment="Center" />
                                     <Slider x:Name="Horizontal3Slider" Grid.Row="2" Grid.Column="1" Tag="H2" Minimum="0" Maximum="100" Value="60" Foreground="{StaticResource AccentBrush}" ValueChanged="BorderSliderChanged" />
                                     <TextBlock x:Name="Horizontal3ValueText" Grid.Row="2" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ValueStyle}" Text="60%" />
+                                    <TextBox x:Name="Horizontal3TextBox" Grid.Row="2" Grid.Column="3" Tag="H2" Margin="8,0,0,6" LostFocus="BorderTextBoxCommitted" KeyDown="BorderTextBox_KeyDown" Text="60" />
 
                                     <TextBlock Grid.Row="3" Grid.Column="0" Text="Top 4" Style="{StaticResource LabelStyle}" VerticalAlignment="Center" />
                                     <Slider x:Name="Horizontal4Slider" Grid.Row="3" Grid.Column="1" Tag="H3" Minimum="0" Maximum="100" Value="80" Foreground="{StaticResource AccentBrush}" ValueChanged="BorderSliderChanged" />
                                     <TextBlock x:Name="Horizontal4ValueText" Grid.Row="3" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ValueStyle}" Text="80%" />
+                                    <TextBox x:Name="Horizontal4TextBox" Grid.Row="3" Grid.Column="3" Tag="H3" Margin="8,0,0,6" LostFocus="BorderTextBoxCommitted" KeyDown="BorderTextBox_KeyDown" Text="80" />
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -345,7 +450,7 @@
             <Border Grid.Row="1"
                     Style="{StaticResource CardStyle}"
                     Background="{StaticResource PanelBrush}">
-                <controls:TwentyFiveSlicePreviewControl x:Name="PreviewControl" Margin="12" />
+                <controls:TwentyFiveSlicePreviewControl x:Name="PreviewControl" Margin="12" GuideEditChanged="PreviewControl_GuideEditChanged" />
             </Border>
         </Grid>
     </Grid>
