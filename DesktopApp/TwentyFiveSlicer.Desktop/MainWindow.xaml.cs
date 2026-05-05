@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     private readonly SliceAssistantService _assistant = new();
     private readonly AppStateStore _appStateStore = new(AppStatePath);
     private readonly IReadOnlyList<CloudAiProviderDescriptor> _cloudAiProviders = CloudAiProviderCatalog.GetAll();
+    private readonly CloudAiClient _cloudAiClient = new();
     private readonly Dictionary<string, TwentyFiveSliceData> _presetLibrary = new()
     {
         ["Preset: Default"] = TwentyFiveSliceData.CreateDefault(),
@@ -260,6 +261,31 @@ public partial class MainWindow : Window
         }
 
         AssistantResultText.Text = result.Message;
+    }
+
+    private async void AskCloudAi_Click(object sender, RoutedEventArgs e)
+    {
+        if (CloudAiEnabledCheckBox.IsChecked != true)
+        {
+            AssistantResultText.Text = "Cloud AI is disabled. Enable Cloud AI, choose a provider, and save settings first. Local assistant features are still available.";
+            return;
+        }
+
+        CloudAiProviderDescriptor? provider = GetSelectedCloudAiProvider();
+        if (provider is null)
+        {
+            AssistantResultText.Text = "Choose a cloud AI provider before asking cloud AI.";
+            return;
+        }
+
+        string prompt = BuildCloudAiPrompt();
+        CloudAiSettings settings = CreateCloudAiSettings();
+        AssistantResultText.Text = $"Asking {provider.DisplayName}...";
+
+        CloudAiResult result = await _cloudAiClient.AskAsync(provider, settings, prompt);
+        AssistantResultText.Text = result.Success
+            ? $"Cloud AI ({provider.DisplayName}) advice:\n{result.Advice}"
+            : $"Cloud AI was unavailable: {result.ErrorMessage}\n\nLocal fallback:\n{BuildLocalFallbackAdvice()}";
     }
 
     private void OptimizeButton_Click(object sender, RoutedEventArgs e)
@@ -636,6 +662,7 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         SaveAppState();
+        _cloudAiClient.Dispose();
     }
 
     private void LoadImage(string filePath)
@@ -987,6 +1014,41 @@ public partial class MainWindow : Window
     {
         return CloudAiProviderComboBox.SelectedItem as CloudAiProviderDescriptor ??
             (CloudAiProviderComboBox.SelectedValue is string id ? CloudAiProviderCatalog.Find(id) : null);
+    }
+
+    private string BuildCloudAiPrompt()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Analyze this 25-slice UI asset configuration and recommend border edits.");
+        builder.AppendLine($"Source image: {(_sourceImage is null ? "not loaded" : $"{_sourceImage.PixelWidth} x {_sourceImage.PixelHeight}px")}");
+        builder.AppendLine($"Target preview: {TargetWidthSlider.Value:0} x {TargetHeightSlider.Value:0}px");
+        builder.AppendLine($"Vertical borders: {string.Join(", ", _verticalBorders.Select(value => $"{value:0.#}%"))}");
+        builder.AppendLine($"Horizontal borders: {string.Join(", ", _horizontalBorders.Select(value => $"{value:0.#}%"))}");
+        builder.AppendLine($"Debug overlay: {DebuggingViewCheckBox.IsChecked == true}; source guides: {SourceComparisonCheckBox.IsChecked == true}; flip X: {FlipXCheckBox.IsChecked == true}; flip Y: {FlipYCheckBox.IsChecked == true}");
+        builder.AppendLine("Return concise advice plus exact suggested verticalBorders and horizontalBorders if changes are recommended.");
+
+        if (!string.IsNullOrWhiteSpace(AssistantPromptBox.Text))
+        {
+            builder.AppendLine($"User request: {AssistantPromptBox.Text.Trim()}");
+        }
+
+        return builder.ToString();
+    }
+
+    private string BuildLocalFallbackAdvice()
+    {
+        if (_sourceImage is null)
+        {
+            return "Load an image, then use Analyze, Find Best Fit, or Optimize Across Sizes for local recommendations.";
+        }
+
+        SliceAssistantAnalysis analysis = _assistant.AnalyzeDetailed(
+            _sourceImage.PixelWidth,
+            _sourceImage.PixelHeight,
+            TargetWidthSlider.Value,
+            TargetHeightSlider.Value,
+            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+        return AssistantReportFormatter.FormatAnalysis(analysis);
     }
 
     private DesktopSessionState CreateSessionState()

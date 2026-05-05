@@ -304,6 +304,7 @@
                                     <Button Content="Suggest Borders" Style="{StaticResource ActionButtonStyle}" Click="SuggestBorders_Click" />
                                     <Button Content="Analyze" Style="{StaticResource ActionButtonStyle}" Click="AnalyzeAssistant_Click" />
                                     <Button Content="Apply Prompt" Style="{StaticResource ActionButtonStyle}" Click="ApplyAssistantPrompt_Click" />
+                                    <Button Content="Ask Cloud AI" Style="{StaticResource ActionButtonStyle}" Click="AskCloudAi_Click" />
                                     <Button Content="Optimize Button" Style="{StaticResource ActionButtonStyle}" Click="OptimizeButton_Click" />
                                     <Button Content="Apply Top Recommendation" Style="{StaticResource ActionButtonStyle}" Click="ApplyTopRecommendation_Click" />
                                     <Button Content="Find Best Fit" Style="{StaticResource ActionButtonStyle}" Click="FindBestFit_Click" />

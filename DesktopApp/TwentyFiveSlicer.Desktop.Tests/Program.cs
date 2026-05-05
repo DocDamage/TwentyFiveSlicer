@@ -33,7 +33,12 @@ var tests = new (string Name, Action Test)[]
     ("CloudAiRequestBuilder builds OpenAI compatible requests", CloudAiRequestBuilderBuildsOpenAiCompatibleRequests),
     ("CloudAiRequestBuilder builds Anthropic requests", CloudAiRequestBuilderBuildsAnthropicRequests),
     ("CloudAiRequestBuilder builds Gemini requests", CloudAiRequestBuilderBuildsGeminiRequests),
-    ("AppStateStore round trips cloud AI settings", AppStateStoreRoundTripsCloudAiSettings)
+    ("AppStateStore round trips cloud AI settings", AppStateStoreRoundTripsCloudAiSettings),
+    ("CloudAiClient parses OpenAI compatible responses", CloudAiClientParsesOpenAiCompatibleResponses),
+    ("CloudAiClient parses Anthropic responses", CloudAiClientParsesAnthropicResponses),
+    ("CloudAiClient parses Gemini responses", CloudAiClientParsesGeminiResponses),
+    ("CloudAiClient reports HTTP failures", CloudAiClientReportsHttpFailures),
+    ("CloudAiClient reports missing API key", CloudAiClientReportsMissingApiKey)
 };
 
 int failures = 0;
@@ -501,6 +506,96 @@ static void AppStateStoreRoundTripsCloudAiSettings()
     }
 }
 
+static void CloudAiClientParsesOpenAiCompatibleResponses()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_OPENAI_KEY", "openai-test-key");
+    using var client = new CloudAiClient(new HttpClient(new FakeHttpHandler("""{"choices":[{"message":{"content":"Use 12/42/58/88 borders."}}]}""")));
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("openai")!;
+    var settings = new CloudAiSettings
+    {
+        Enabled = true,
+        ProviderId = "openai",
+        ApiKeyEnvironmentVariable = "TFS_TEST_OPENAI_KEY"
+    };
+
+    CloudAiResult result = client.AskAsync(provider, settings, "Analyze").GetAwaiter().GetResult();
+
+    Assert.True(result.Success, "OpenAI-compatible response should parse successfully.");
+    Assert.Equal("Use 12/42/58/88 borders.", result.Advice, "Advice text should be extracted.");
+}
+
+static void CloudAiClientParsesAnthropicResponses()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_ANTHROPIC_KEY", "anthropic-test-key");
+    using var client = new CloudAiClient(new HttpClient(new FakeHttpHandler("""{"content":[{"type":"text","text":"Keep the center stretch narrow."}]}""")));
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("claude")!;
+    var settings = new CloudAiSettings
+    {
+        Enabled = true,
+        ProviderId = "anthropic",
+        ApiKeyEnvironmentVariable = "TFS_TEST_ANTHROPIC_KEY"
+    };
+
+    CloudAiResult result = client.AskAsync(provider, settings, "Analyze").GetAwaiter().GetResult();
+
+    Assert.True(result.Success, "Anthropic response should parse successfully.");
+    Assert.Equal("Keep the center stretch narrow.", result.Advice, "Advice text should be extracted.");
+}
+
+static void CloudAiClientParsesGeminiResponses()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_GEMINI_KEY", "gemini-test-key");
+    using var client = new CloudAiClient(new HttpClient(new FakeHttpHandler("""{"candidates":[{"content":{"parts":[{"text":"Use symmetrical edges."}]}}]}""")));
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("gemini")!;
+    var settings = new CloudAiSettings
+    {
+        Enabled = true,
+        ProviderId = "gemini",
+        ApiKeyEnvironmentVariable = "TFS_TEST_GEMINI_KEY"
+    };
+
+    CloudAiResult result = client.AskAsync(provider, settings, "Analyze").GetAwaiter().GetResult();
+
+    Assert.True(result.Success, "Gemini response should parse successfully.");
+    Assert.Equal("Use symmetrical edges.", result.Advice, "Advice text should be extracted.");
+}
+
+static void CloudAiClientReportsHttpFailures()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_OPENAI_KEY", "openai-test-key");
+    using var client = new CloudAiClient(new HttpClient(new FakeHttpHandler("""{"error":"bad"}""", System.Net.HttpStatusCode.BadRequest)));
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("openai")!;
+    var settings = new CloudAiSettings
+    {
+        Enabled = true,
+        ProviderId = "openai",
+        ApiKeyEnvironmentVariable = "TFS_TEST_OPENAI_KEY"
+    };
+
+    CloudAiResult result = client.AskAsync(provider, settings, "Analyze").GetAwaiter().GetResult();
+
+    Assert.True(!result.Success, "HTTP failures should be reported as unsuccessful.");
+    Assert.True(result.ErrorMessage.Contains("400", StringComparison.OrdinalIgnoreCase), "Error should include status code.");
+}
+
+static void CloudAiClientReportsMissingApiKey()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_MISSING_KEY", null);
+    using var client = new CloudAiClient(new HttpClient(new FakeHttpHandler("""{}""")));
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("openai")!;
+    var settings = new CloudAiSettings
+    {
+        Enabled = true,
+        ProviderId = "openai",
+        ApiKeyEnvironmentVariable = "TFS_TEST_MISSING_KEY"
+    };
+
+    CloudAiResult result = client.AskAsync(provider, settings, "Analyze").GetAwaiter().GetResult();
+
+    Assert.True(!result.Success, "Missing API key should be reported as unsuccessful.");
+    Assert.True(result.ErrorMessage.Contains("TFS_TEST_MISSING_KEY", StringComparison.OrdinalIgnoreCase), "Error should name missing env var.");
+}
+
 static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int left, int right, int top, int bottom)
 {
     var pixels = new byte[width * height * 4];
@@ -557,5 +652,25 @@ static class Assert
         {
             throw new InvalidOperationException("Expected collection to contain a matching item.");
         }
+    }
+}
+
+sealed class FakeHttpHandler : HttpMessageHandler
+{
+    private readonly string _responseBody;
+    private readonly System.Net.HttpStatusCode _statusCode;
+
+    public FakeHttpHandler(string responseBody, System.Net.HttpStatusCode statusCode = System.Net.HttpStatusCode.OK)
+    {
+        _responseBody = responseBody;
+        _statusCode = statusCode;
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(new HttpResponseMessage(_statusCode)
+        {
+            Content = new StringContent(_responseBody)
+        });
     }
 }
