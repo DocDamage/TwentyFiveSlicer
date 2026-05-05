@@ -10,6 +10,8 @@ public sealed class DesktopSessionState
 
     public double TargetHeight { get; set; } = 360d;
 
+    public double PreviewZoom { get; set; } = 1d;
+
     public bool KeepAspect { get; set; }
 
     public bool DebugOverlay { get; set; }

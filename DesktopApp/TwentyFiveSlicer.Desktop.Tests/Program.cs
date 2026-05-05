@@ -17,6 +17,7 @@ var tests = new (string Name, Action Test)[]
     ("Layout calculator flips source regions without moving destinations", LayoutCalculatorFlipsSourceRegionsWithoutMovingDestinations),
     ("Preview control renders export bitmap", PreviewControlRendersExportBitmap),
     ("Preview control export bitmap encodes as PNG", PreviewControlExportBitmapEncodesAsPng),
+    ("Preview control clamps zoom", PreviewControlClampsZoomValue),
     ("Slice data JSON stays Unity compatible", SliceDataJsonStaysUnityCompatible),
     ("SliceValidation warns when fixed columns exceed target width", SliceValidationWarnsWhenFixedColumnsExceedTargetWidth),
     ("RecentFileList keeps newest unique files first", RecentFileListKeepsNewestUniqueFilesFirst),
@@ -205,6 +206,23 @@ static void PreviewControlExportBitmapEncodesAsPng()
         Assert.True(IsPng(pngBytes), "Export encoder should produce a PNG file signature.");
         Assert.Equal(64, decoded.PixelWidth, "Encoded PNG should preserve target width.");
         Assert.Equal(48, decoded.PixelHeight, "Encoded PNG should preserve target height.");
+    });
+}
+
+static void PreviewControlClampsZoomValue()
+{
+    RunOnStaThread(() =>
+    {
+        var preview = new TwentyFiveSlicePreviewControl();
+
+        preview.PreviewZoom = 0.1d;
+        Assert.Equal(0.5d, preview.PreviewZoom, "Preview zoom should not go below the Unity editor minimum.");
+
+        preview.PreviewZoom = 2.8d;
+        Assert.Equal(2d, preview.PreviewZoom, "Preview zoom should not exceed the Unity editor maximum.");
+
+        preview.PreviewZoom = 1.35d;
+        Assert.Equal(1.35d, preview.PreviewZoom, "Preview zoom should preserve valid zoom values.");
     });
 }
 
@@ -506,6 +524,7 @@ static void AppStateStoreRoundTripsLastSession()
             SliceData = new TwentyFiveSliceData([12d, 40d, 60d, 88d], [10d, 42d, 58d, 90d]),
             TargetWidth = 1024d,
             TargetHeight = 128d,
+            PreviewZoom = 1.5d,
             KeepAspect = true,
             DebugOverlay = true,
             ExportDebug = true,
@@ -525,6 +544,7 @@ static void AppStateStoreRoundTripsLastSession()
         DesktopSessionState session = loaded.LastSession!;
         Assert.Equal(@"C:\art\button.png", session.ImagePath, "Image path should round trip.");
         Assert.Equal(1024d, session.TargetWidth, "Target width should round trip.");
+        Assert.Equal(1.5d, session.PreviewZoom, "Preview zoom should round trip.");
         Assert.Equal(true, session.KeepAspect, "Toggle state should round trip.");
         Assert.Equal(88d, session.SliceData.VerticalBorders[3], "Slice data should round trip.");
         Assert.Equal("Best fit: Button", session.AssistantOutput, "Assistant output should round trip.");

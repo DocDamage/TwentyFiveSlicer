@@ -783,11 +783,13 @@ public partial class MainWindow : Window
     {
         TargetWidthValueText.Text = $"{TargetWidthSlider.Value:0} px";
         TargetHeightValueText.Text = $"{TargetHeightSlider.Value:0} px";
+        PreviewZoomValueText.Text = $"{PreviewZoomSlider.Value * 100d:0}%";
 
         PreviewControl.SourceImage = _sourceImage;
         PreviewControl.SliceData = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders);
         PreviewControl.TargetWidth = TargetWidthSlider.Value;
         PreviewControl.TargetHeight = TargetHeightSlider.Value;
+        PreviewControl.PreviewZoom = PreviewZoomSlider.Value;
         PreviewControl.DebuggingView = DebuggingViewCheckBox.IsChecked == true;
         PreviewControl.ShowSourceGuides = SourceComparisonCheckBox.IsChecked == true;
         PreviewControl.FlipX = FlipXCheckBox.IsChecked == true;
@@ -1090,6 +1092,7 @@ public partial class MainWindow : Window
             SliceData = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
             TargetWidth = TargetWidthSlider.Value,
             TargetHeight = TargetHeightSlider.Value,
+            PreviewZoom = PreviewZoomSlider.Value,
             KeepAspect = KeepAspectCheckBox.IsChecked == true,
             DebugOverlay = DebuggingViewCheckBox.IsChecked == true,
             ExportDebug = ExportDebugCheckBox.IsChecked == true,
@@ -1114,6 +1117,7 @@ public partial class MainWindow : Window
 
             _isUpdatingUi = true;
             KeepAspectCheckBox.IsChecked = session.KeepAspect;
+            PreviewZoomSlider.Value = Math.Clamp(session.PreviewZoom <= 0d ? 1d : session.PreviewZoom, PreviewZoomSlider.Minimum, PreviewZoomSlider.Maximum);
             DebuggingViewCheckBox.IsChecked = session.DebugOverlay;
             ExportDebugCheckBox.IsChecked = session.ExportDebug;
             SourceComparisonCheckBox.IsChecked = session.SourceGuides;

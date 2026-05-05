@@ -26,6 +26,7 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     private TwentyFiveSliceData _sliceData = TwentyFiveSliceData.CreateDefault();
     private double _targetWidth = 640d;
     private double _targetHeight = 360d;
+    private double _previewZoom = 1d;
     private bool _debuggingView;
     private bool _flipX;
     private bool _flipY;
@@ -113,6 +114,22 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         }
     }
 
+    public double PreviewZoom
+    {
+        get => _previewZoom;
+        set
+        {
+            double zoom = Math.Clamp(value, 0.5d, 2d);
+            if (Math.Abs(_previewZoom - zoom) < 0.0001d)
+            {
+                return;
+            }
+
+            _previewZoom = zoom;
+            InvalidateVisual();
+        }
+    }
+
     public bool GuideEditingEnabled
     {
         get => _guideEditingEnabled;
@@ -182,6 +199,8 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         {
             scale = 1d;
         }
+
+        scale *= PreviewZoom;
 
         var previewRect = new Rect(
             availableRect.X + (availableRect.Width - (safeTargetWidth * scale)) / 2d,

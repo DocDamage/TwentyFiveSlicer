@@ -186,6 +186,7 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -227,6 +228,24 @@
                                                VerticalAlignment="Bottom"
                                                Style="{StaticResource ValueStyle}"
                                                Text="360 px" />
+
+                                    <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,12,12,0">
+                                        <TextBlock Text="Zoom" Style="{StaticResource LabelStyle}" />
+                                        <Slider x:Name="PreviewZoomSlider"
+                                                Minimum="0.5"
+                                                Maximum="2"
+                                                Value="1"
+                                                TickFrequency="0.1"
+                                                Foreground="{StaticResource AccentBrush}"
+                                                ValueChanged="PreviewSettingChanged" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="PreviewZoomValueText"
+                                               Grid.Row="2"
+                                               Grid.Column="1"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Bottom"
+                                               Style="{StaticResource ValueStyle}"
+                                               Text="100%" />
                                 </Grid>
 
                                 <WrapPanel Margin="0,16,0,0">
