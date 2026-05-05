@@ -87,6 +87,12 @@ var tests = new (string Name, Action Test)[]
     ("Cloud AI provider labels prefer friendly names", CloudAiProviderLabelsPreferFriendlyNames),
     ("Cloud AI providers have badge icons", CloudAiProvidersHaveBadgeIcons),
     ("Registered SVG assets render", RegisteredSvgAssetsRender),
+    ("Golden samples exist and load", GoldenSamplesExistAndLoad),
+    ("ImageBorderSuggestion matches golden samples", ImageBorderSuggestionMatchesGoldenSamples),
+    ("Local assistant ranks golden button correctly", LocalAssistantRanksGoldenButtonCorrectly),
+    ("Image-aware review accepts golden samples", ImageAwareReviewAcceptsGoldenSamples),
+    ("Image-aware review rejects mismatched golden cuts", ImageAwareReviewRejectsMismatchedGoldenCuts),
+    ("Cloud parser extracts golden sample advice", CloudParserExtractsGoldenSampleAdvice),
     ("App icon assets exist", AppIconAssetsExist),
     ("Slice skin panel renders Candy asset", SliceSkinPanelRendersCandyAsset),
     ("Slice skin panel renders clean fallback", SliceSkinPanelRendersCleanFallback),
@@ -252,6 +258,100 @@ static void RegisteredSvgAssetsRender()
         Assert.True(drawing.Bounds.Width > 0d, $"SVG asset {asset.Id} should render with positive width.");
         Assert.True(drawing.Bounds.Height > 0d, $"SVG asset {asset.Id} should render with positive height.");
     }
+}
+
+static void GoldenSamplesExistAndLoad()
+{
+    foreach (GoldenSample sample in LoadGoldenSamples())
+    {
+        Assert.True(File.Exists(sample.ImagePath), $"Golden image should exist for {sample.Name}.");
+        Assert.True(File.Exists(sample.SlicePath), $"Golden slice JSON should exist for {sample.Name}.");
+        Assert.True(sample.Image.PixelWidth > 0, $"Golden image {sample.Name} should load with positive width.");
+        Assert.True(sample.Image.PixelHeight > 0, $"Golden image {sample.Name} should load with positive height.");
+        Assert.Equal(4, sample.Expected.VerticalBorders.Length, $"Golden slice {sample.Name} should include four vertical borders.");
+        Assert.Equal(4, sample.Expected.HorizontalBorders.Length, $"Golden slice {sample.Name} should include four horizontal borders.");
+    }
+}
+
+static void ImageBorderSuggestionMatchesGoldenSamples()
+{
+    foreach (GoldenSample sample in LoadGoldenSamples())
+    {
+        SliceBorderSuggestion suggestion = ImageBorderSuggestionService.SuggestBordersDetailed(sample.Image);
+
+        AssertAxisNear(sample.Expected.VerticalBorders, suggestion.SliceData.VerticalBorders, 0.15d, $"{sample.Name} vertical suggestion should match golden data.");
+        AssertAxisNear(sample.Expected.HorizontalBorders, suggestion.SliceData.HorizontalBorders, 0.15d, $"{sample.Name} horizontal suggestion should match golden data.");
+        Assert.True(suggestion.Confidence >= 0.65d, $"{sample.Name} should produce a useful confidence score.");
+    }
+}
+
+static void LocalAssistantRanksGoldenButtonCorrectly()
+{
+    GoldenSample button = LoadGoldenSamples().Single(sample => sample.Name == "button");
+    var assistant = new SliceAssistantService();
+
+    IReadOnlyList<SliceCandidateSuggestion> candidates = assistant.RecommendCandidates(
+        button.Image.PixelWidth,
+        button.Image.PixelHeight,
+        300d,
+        72d,
+        TwentyFiveSliceData.CreateDefault());
+
+    SliceCandidateSuggestion top = candidates[0];
+    Assert.Equal("Button fit", top.Name, "Wide golden button should rank the button candidate first.");
+    AssertAxisNear([10d, 42d, 58d, 90d], top.SliceData.VerticalBorders, 0.01d, "Button candidate vertical borders should remain stable.");
+    AssertAxisNear([12d, 42d, 58d, 88d], top.SliceData.HorizontalBorders, 0.01d, "Button candidate horizontal borders should remain stable.");
+}
+
+static void ImageAwareReviewAcceptsGoldenSamples()
+{
+    foreach (GoldenSample sample in LoadGoldenSamples())
+    {
+        SliceSuggestionReview review = SliceSuggestionReviewService.Review(
+            TwentyFiveSliceData.CreateDefault(),
+            sample.Expected,
+            sample.Image,
+            sample.Image.PixelWidth * 2d,
+            sample.Image.PixelHeight * 2d);
+
+        Assert.True(review.SafeToApply, $"{sample.Name} golden slice should pass image-aware review.");
+        Assert.True(review.Risks.Count == 0, $"{sample.Name} golden slice should not report risks.");
+        Assert.Contains(review.Improvements, improvement => improvement.Contains("opaque content bounds", StringComparison.OrdinalIgnoreCase));
+    }
+}
+
+static void ImageAwareReviewRejectsMismatchedGoldenCuts()
+{
+    GoldenSample button = LoadGoldenSamples().Single(sample => sample.Name == "button");
+    var mismatched = new TwentyFiveSliceData([2d, 40d, 60d, 98d], [2d, 40d, 60d, 98d]);
+
+    SliceSuggestionReview review = SliceSuggestionReviewService.Review(
+        TwentyFiveSliceData.CreateDefault(),
+        mismatched,
+        button.Image,
+        300d,
+        72d);
+
+    Assert.True(!review.SafeToApply, "Image-aware review should reject cuts that miss detected opaque bounds.");
+    Assert.Contains(review.Risks, risk => risk.Contains("opaque content bounds", StringComparison.OrdinalIgnoreCase));
+}
+
+static void CloudParserExtractsGoldenSampleAdvice()
+{
+    GoldenSample panel = LoadGoldenSamples().Single(sample => sample.Name == "panel");
+    string advice = """
+        The safest cut preserves the detected panel padding:
+        ```json
+        {
+          "vertical_borders": ["11.7%", "40%", "60%", "88.3%"],
+          "horizontal_borders": ["17.5%", "40%", "60%", "82.5%"]
+        }
+        ```
+        """;
+
+    Assert.True(CloudAiAdviceParser.TryParseSliceData(advice, out TwentyFiveSliceData? parsed), "Cloud parser should extract golden fenced JSON advice.");
+    AssertAxisNear(panel.Expected.VerticalBorders, parsed!.VerticalBorders, 0.01d, "Parsed vertical borders should match golden panel.");
+    AssertAxisNear(panel.Expected.HorizontalBorders, parsed.HorizontalBorders, 0.01d, "Parsed horizontal borders should match golden panel.");
 }
 
 static void AppIconAssetsExist()
@@ -1600,6 +1700,57 @@ static CloudAiImageInput CreateCloudImage()
     return new CloudAiImageInput("image/png", "abc123");
 }
 
+static IReadOnlyList<GoldenSample> LoadGoldenSamples()
+{
+    string root = Path.Combine(TestProjectRoot(), "GoldenSamples");
+    return
+    [
+        LoadGoldenSample("button", Path.Combine(root, "button-100x40-padding.png"), Path.Combine(root, "button-100x40-padding.25slice.json")),
+        LoadGoldenSample("panel", Path.Combine(root, "panel-120x80-padding.png"), Path.Combine(root, "panel-120x80-padding.25slice.json"))
+    ];
+}
+
+static GoldenSample LoadGoldenSample(string name, string imagePath, string slicePath)
+{
+    return new GoldenSample(name, imagePath, slicePath, LoadBitmap(imagePath), ReadSliceData(slicePath));
+}
+
+static BitmapSource LoadBitmap(string imagePath)
+{
+    using FileStream stream = File.OpenRead(imagePath);
+    var image = new BitmapImage();
+    image.BeginInit();
+    image.CacheOption = BitmapCacheOption.OnLoad;
+    image.StreamSource = stream;
+    image.EndInit();
+    image.Freeze();
+    return image;
+}
+
+static TwentyFiveSliceData ReadSliceData(string slicePath)
+{
+    return JsonSerializer.Deserialize<TwentyFiveSliceData>(File.ReadAllText(slicePath)) ??
+        throw new InvalidDataException($"Unable to read slice data from {slicePath}.");
+}
+
+static void AssertAxisNear(IReadOnlyList<double> expected, IReadOnlyList<double> actual, double tolerance, string message)
+{
+    Assert.Equal(expected.Count, actual.Count, message);
+    for (int index = 0; index < expected.Count; index++)
+    {
+        double delta = Math.Abs(expected[index] - actual[index]);
+        if (delta > tolerance)
+        {
+            throw new InvalidOperationException($"{message} Index {index} expected {expected[index]:0.###}, got {actual[index]:0.###}, delta {delta:0.###}.");
+        }
+    }
+}
+
+static string TestProjectRoot()
+{
+    return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", ".."));
+}
+
 static string DesktopProjectRoot()
 {
     return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "TwentyFiveSlicer.Desktop"));
@@ -1752,3 +1903,5 @@ sealed class FakeHttpHandler : HttpMessageHandler
         });
     }
 }
+
+sealed record GoldenSample(string Name, string ImagePath, string SlicePath, BitmapSource Image, TwentyFiveSliceData Expected);
