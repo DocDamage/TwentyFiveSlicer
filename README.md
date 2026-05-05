@@ -193,24 +193,82 @@ You can remove slice data that is no longer needed:
 
 ---
 
-## Desktop App Port
+## Standalone Windows Desktop App
 
-A standalone Windows desktop port now lives in `DesktopApp/TwentyFiveSlicer.Desktop`.
+A standalone WPF desktop app lives in `DesktopApp/TwentyFiveSlicer.Desktop`. It is intended for users who want the original 25-slice authoring workflow without opening Unity.
 
-It keeps the core 25-slice layout behavior from the Unity package:
+The desktop app preserves the important behavior from the Unity package:
 
 - 4 vertical borders and 4 horizontal borders stored as percentages.
-- Fixed/stretched distribution across the 5x5 grid using the same column and row rules.
-- Live preview of the rendered 25-slice output, plus optional debug coloring and flip X/Y.
-- JSON import/export for slice border data.
+- Unity-compatible JSON using `verticalBorders` and `horizontalBorders`.
+- The same 5x5 fixed/stretch layout rules as `TwentyFiveSliceImage` and `TwentyFiveSliceSpriteRenderer`.
+- Fixed-region scaling when the output target is smaller than the fixed edge total.
+- Flip X/Y, debug overlay, source guide comparison, and PNG preview export.
+- Direct guide dragging, including intersection handles that move vertical and horizontal guides together.
+- Preview zoom from 50% to 200%, including slider, mouse wheel, quick zoom buttons, and 100% reset.
 
-### Build
+### Desktop Authoring Features
+
+- Open PNG, JPG, BMP, GIF, TIFF, or JSON files by button or drag and drop.
+- Save and copy Unity-compatible slice JSON.
+- Export rendered PNG previews, with optional debug overlay.
+- Edit borders with sliders, numeric fields, or direct preview guide dragging.
+- Undo and redo border/target-size changes.
+- Recent file restore and last-session persistence.
+- Built-in presets, user presets, candidate preview/apply workflow, and batch checks across common target sizes.
+- Batch export common preview sizes to a folder.
+
+### Local And Cloud AI Assistance
+
+The desktop app includes local assistant features and optional cloud AI.
+
+Local assistant features:
+
+- Detect transparent padding and suggest borders.
+- Analyze the current slice setup for warnings.
+- Apply natural-language slice edits such as "make this a button", "make this a panel", "symmetrize", or "make corners thicker".
+- Rank candidate slice presets for one target size or across multiple target sizes.
+
+Cloud AI features:
+
+- Optional provider selection and endpoint override.
+- API keys are read from environment variables only; raw keys are not saved in app state.
+- Vision-capable providers receive the loaded image as PNG context.
+- If a cloud model returns exact `verticalBorders` and `horizontalBorders`, the app parses and applies them automatically.
+- Supported provider presets include OpenAI / ChatGPT, Anthropic Claude, Google Gemini, Moonshot Kimi, DeepSeek, Zhipu GLM, MiniMax, Mistral, Cohere, Groq, xAI Grok, Perplexity, and custom OpenAI-compatible endpoints.
+
+Common API key environment variables:
+
+```powershell
+$env:OPENAI_API_KEY="..."
+$env:ANTHROPIC_API_KEY="..."
+$env:GEMINI_API_KEY="..."
+$env:MOONSHOT_API_KEY="..."
+$env:DEEPSEEK_API_KEY="..."
+$env:ZHIPU_API_KEY="..."
+$env:MINIMAX_API_KEY="..."
+$env:MISTRAL_API_KEY="..."
+$env:COHERE_API_KEY="..."
+$env:GROQ_API_KEY="..."
+$env:XAI_API_KEY="..."
+$env:PERPLEXITY_API_KEY="..."
+```
+
+### Build And Test
+
+Run the desktop test harness:
+
+```powershell
+dotnet run --project .\DesktopApp\TwentyFiveSlicer.Desktop.Tests\TwentyFiveSlicer.Desktop.Tests.csproj
+```
+
+Build the desktop app:
 
 ```powershell
 dotnet build .\DesktopApp\TwentyFiveSlicer.Desktop\TwentyFiveSlicer.Desktop.csproj
 ```
 
-### Publish a standalone exe
+### Publish A Standalone Exe
 
 ```powershell
 dotnet publish .\DesktopApp\TwentyFiveSlicer.Desktop\TwentyFiveSlicer.Desktop.csproj -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true
@@ -219,6 +277,8 @@ dotnet publish .\DesktopApp\TwentyFiveSlicer.Desktop\TwentyFiveSlicer.Desktop.cs
 Published output:
 
 - `DesktopApp/TwentyFiveSlicer.Desktop/bin/Release/net8.0-windows/win-x64/publish/TwentyFiveSlicer.Desktop.exe`
+
+The published exe is self-contained for Windows x64 and does not require a Unity project.
 
 ---
 
