@@ -89,7 +89,9 @@ var tests = new (string Name, Action Test)[]
     ("Registered SVG assets render", RegisteredSvgAssetsRender),
     ("App icon assets exist", AppIconAssetsExist),
     ("Slice skin panel renders Candy asset", SliceSkinPanelRendersCandyAsset),
+    ("Slice skin panel renders clean fallback", SliceSkinPanelRendersCleanFallback),
     ("Main window uses skinned card surfaces", MainWindowUsesSkinnedCardSurfaces),
+    ("Main window exposes Candy skin toggle and button skin", MainWindowExposesCandySkinToggleAndButtonSkin),
     ("Slice concept diagram renders", SliceConceptDiagramRenders)
 };
 
@@ -289,6 +291,34 @@ static void SliceSkinPanelRendersCandyAsset()
     });
 }
 
+static void SliceSkinPanelRendersCleanFallback()
+{
+    RunOnStaThread(() =>
+    {
+        var control = new SliceSkinPanel
+        {
+            UseSkin = false,
+            FallbackBackground = Brushes.DarkSlateGray,
+            FallbackBorderBrush = Brushes.White,
+            FallbackBorderThickness = new Thickness(1d),
+            FallbackCornerRadius = new CornerRadius(8d),
+            Width = 180d,
+            Height = 80d
+        };
+
+        control.Measure(new Size(180d, 80d));
+        control.Arrange(new Rect(0d, 0d, 180d, 80d));
+        control.UpdateLayout();
+
+        var bitmap = new RenderTargetBitmap(180, 80, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(control);
+
+        Assert.Equal(180, bitmap.PixelWidth, "Fallback skin panel render should preserve requested width.");
+        Assert.Equal(80, bitmap.PixelHeight, "Fallback skin panel render should preserve requested height.");
+        Assert.True(BitmapHasVisiblePixels(bitmap), "Fallback skin panel render should include visible pixels.");
+    });
+}
+
 static void MainWindowUsesSkinnedCardSurfaces()
 {
     string xamlPath = Path.Combine(DesktopProjectRoot(), "MainWindow.xaml");
@@ -297,6 +327,20 @@ static void MainWindowUsesSkinnedCardSurfaces()
     int skinnedCardCount = CountOccurrences(xaml, "Style=\"{StaticResource SkinnedCardStyle}\"");
     Assert.True(skinnedCardCount >= 6, "Sidebar cards should use the reusable sliced skin panel style.");
     Assert.True(xaml.Contains("x:Key=\"SkinnedCardStyle\"", StringComparison.Ordinal), "Main window should define the skinned card style.");
+}
+
+static void MainWindowExposesCandySkinToggleAndButtonSkin()
+{
+    string xamlPath = Path.Combine(DesktopProjectRoot(), "MainWindow.xaml");
+    string xaml = File.ReadAllText(xamlPath);
+
+    Assert.True(xaml.Contains("x:Name=\"CandySkinCheckBox\"", StringComparison.Ordinal), "Main window should expose a Candy skin toggle.");
+    Assert.True(xaml.Contains("Checked=\"CandySkinChanged\"", StringComparison.Ordinal), "Candy skin toggle should update theme state when enabled.");
+    Assert.True(xaml.Contains("Unchecked=\"CandySkinChanged\"", StringComparison.Ordinal), "Candy skin toggle should update theme state when disabled.");
+    Assert.True(xaml.Contains("button-normal.png", StringComparison.Ordinal), "Button template should use the Candy normal button asset.");
+    Assert.True(xaml.Contains("button-hover.png", StringComparison.Ordinal), "Button template should use the Candy hover button asset.");
+    Assert.True(xaml.Contains("button-pressed.png", StringComparison.Ordinal), "Button template should use the Candy pressed button asset.");
+    Assert.True(xaml.Contains("FallbackBackground=\"{TemplateBinding Background}\"", StringComparison.Ordinal), "Button template should retain clean fallback styling.");
 }
 
 static void SliceConceptDiagramRenders()

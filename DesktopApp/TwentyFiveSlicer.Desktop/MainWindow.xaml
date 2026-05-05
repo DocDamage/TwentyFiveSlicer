@@ -39,6 +39,11 @@
         <Style x:Key="SkinnedCardStyle" TargetType="{x:Type controls:SliceSkinPanel}">
             <Setter Property="Source" Value="Assets/Skin/Candy/panel-subtle.png" />
             <Setter Property="SliceDataSource" Value="Assets/Skin/Candy/panel-subtle.25slice.json" />
+            <Setter Property="UseSkin" Value="{Binding Path=(controls:SliceSkinPanel.CandySkinEnabled), RelativeSource={RelativeSource AncestorType=Window}}" />
+            <Setter Property="FallbackBackground" Value="{StaticResource CardBrush}" />
+            <Setter Property="FallbackBorderBrush" Value="{StaticResource CardBorderBrush}" />
+            <Setter Property="FallbackBorderThickness" Value="1" />
+            <Setter Property="FallbackCornerRadius" Value="22" />
             <Setter Property="Padding" Value="18" />
             <Setter Property="Margin" Value="0,0,0,14" />
         </Style>
@@ -55,18 +60,29 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="ButtonBorder"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="12">
+                        <controls:SliceSkinPanel x:Name="ButtonBorder"
+                                                 Source="Assets/Skin/Candy/button-normal.png"
+                                                 SliceDataSource="Assets/Skin/Candy/button-normal.25slice.json"
+                                                 UseSkin="{Binding Path=(controls:SliceSkinPanel.CandySkinEnabled), RelativeSource={RelativeSource AncestorType=Window}}"
+                                                 FallbackBackground="{TemplateBinding Background}"
+                                                 FallbackBorderBrush="{TemplateBinding BorderBrush}"
+                                                 FallbackBorderThickness="{TemplateBinding BorderThickness}"
+                                                 FallbackCornerRadius="12"
+                                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
-                        </Border>
+                        </controls:SliceSkinPanel>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.92" />
+                                <Setter TargetName="ButtonBorder" Property="Source" Value="Assets/Skin/Candy/button-hover.png" />
+                                <Setter TargetName="ButtonBorder" Property="SliceDataSource" Value="Assets/Skin/Candy/button-hover.25slice.json" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.78" />
+                                <Setter TargetName="ButtonBorder" Property="Source" Value="Assets/Skin/Candy/button-pressed.png" />
+                                <Setter TargetName="ButtonBorder" Property="SliceDataSource" Value="Assets/Skin/Candy/button-pressed.25slice.json" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.54" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -128,6 +144,13 @@
                                Foreground="{StaticResource MutedTextBrush}"
                                FontSize="14"
                                TextWrapping="Wrap" />
+                    <CheckBox x:Name="CandySkinCheckBox"
+                              Content="Candy skin"
+                              IsChecked="True"
+                              Margin="0,14,0,0"
+                              Style="{StaticResource ToggleStyle}"
+                              Checked="CandySkinChanged"
+                              Unchecked="CandySkinChanged" />
 
                     <WrapPanel Margin="0,18,0,12">
                         <Button Style="{StaticResource ActionButtonStyle}" Click="OpenImage_Click" ToolTip="Open image">

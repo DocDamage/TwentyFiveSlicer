@@ -7,6 +7,7 @@ using System.Windows.Media.Imaging;
 using System.Text.Json;
 using System.ComponentModel;
 using Microsoft.Win32;
+using TwentyFiveSlicer.Desktop.Controls;
 using TwentyFiveSlicer.Desktop.Models;
 using TwentyFiveSlicer.Desktop.Services;
 
@@ -64,6 +65,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        SliceSkinPanel.SetCandySkinEnabled(this, CandySkinCheckBox.IsChecked == true);
 
         _verticalSliders = [Vertical1Slider, Vertical2Slider, Vertical3Slider, Vertical4Slider];
         _horizontalSliders = [Horizontal1Slider, Horizontal2Slider, Horizontal3Slider, Horizontal4Slider];
@@ -82,6 +84,16 @@ public partial class MainWindow : Window
         _history = new SliceHistory(CreateEditorState());
         _isWindowReady = true;
         UpdatePreview();
+    }
+
+    private void CandySkinChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_isWindowReady && CandySkinCheckBox is null)
+        {
+            return;
+        }
+
+        SliceSkinPanel.SetCandySkinEnabled(this, CandySkinCheckBox.IsChecked == true);
     }
 
     private void OpenImage_Click(object sender, RoutedEventArgs e)

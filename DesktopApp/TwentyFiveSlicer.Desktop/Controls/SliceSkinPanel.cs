@@ -12,6 +12,12 @@ namespace TwentyFiveSlicer.Desktop.Controls;
 
 public sealed class SliceSkinPanel : ContentControl
 {
+    public static readonly DependencyProperty CandySkinEnabledProperty = DependencyProperty.RegisterAttached(
+        "CandySkinEnabled",
+        typeof(bool),
+        typeof(SliceSkinPanel),
+        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.Inherits | FrameworkPropertyMetadataOptions.AffectsRender));
+
     public static readonly DependencyProperty SourceProperty = DependencyProperty.Register(
         nameof(Source),
         typeof(string),
@@ -23,6 +29,46 @@ public sealed class SliceSkinPanel : ContentControl
         typeof(string),
         typeof(SliceSkinPanel),
         new FrameworkPropertyMetadata(string.Empty, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty UseSkinProperty = DependencyProperty.Register(
+        nameof(UseSkin),
+        typeof(bool),
+        typeof(SliceSkinPanel),
+        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty FallbackBackgroundProperty = DependencyProperty.Register(
+        nameof(FallbackBackground),
+        typeof(Brush),
+        typeof(SliceSkinPanel),
+        new FrameworkPropertyMetadata(Brushes.Transparent, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty FallbackBorderBrushProperty = DependencyProperty.Register(
+        nameof(FallbackBorderBrush),
+        typeof(Brush),
+        typeof(SliceSkinPanel),
+        new FrameworkPropertyMetadata(Brushes.Transparent, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty FallbackBorderThicknessProperty = DependencyProperty.Register(
+        nameof(FallbackBorderThickness),
+        typeof(Thickness),
+        typeof(SliceSkinPanel),
+        new FrameworkPropertyMetadata(new Thickness(0d), FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty FallbackCornerRadiusProperty = DependencyProperty.Register(
+        nameof(FallbackCornerRadius),
+        typeof(CornerRadius),
+        typeof(SliceSkinPanel),
+        new FrameworkPropertyMetadata(new CornerRadius(0d), FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static void SetCandySkinEnabled(DependencyObject element, bool value)
+    {
+        element.SetValue(CandySkinEnabledProperty, value);
+    }
+
+    public static bool GetCandySkinEnabled(DependencyObject element)
+    {
+        return (bool)element.GetValue(CandySkinEnabledProperty);
+    }
 
     public string Source
     {
@@ -36,14 +82,51 @@ public sealed class SliceSkinPanel : ContentControl
         set => SetValue(SliceDataSourceProperty, value);
     }
 
+    public bool UseSkin
+    {
+        get => (bool)GetValue(UseSkinProperty);
+        set => SetValue(UseSkinProperty, value);
+    }
+
+    public Brush FallbackBackground
+    {
+        get => (Brush)GetValue(FallbackBackgroundProperty);
+        set => SetValue(FallbackBackgroundProperty, value);
+    }
+
+    public Brush FallbackBorderBrush
+    {
+        get => (Brush)GetValue(FallbackBorderBrushProperty);
+        set => SetValue(FallbackBorderBrushProperty, value);
+    }
+
+    public Thickness FallbackBorderThickness
+    {
+        get => (Thickness)GetValue(FallbackBorderThicknessProperty);
+        set => SetValue(FallbackBorderThicknessProperty, value);
+    }
+
+    public CornerRadius FallbackCornerRadius
+    {
+        get => (CornerRadius)GetValue(FallbackCornerRadiusProperty);
+        set => SetValue(FallbackCornerRadiusProperty, value);
+    }
+
     protected override void OnRender(DrawingContext drawingContext)
     {
         base.OnRender(drawingContext);
+
+        if (!UseSkin)
+        {
+            DrawFallback(drawingContext);
+            return;
+        }
 
         BitmapSource? image = LoadBitmap(Source);
         TwentyFiveSliceData? sliceData = LoadSliceData(SliceDataSource);
         if (image is null || sliceData is null || ActualWidth <= 0d || ActualHeight <= 0d)
         {
+            DrawFallback(drawingContext);
             return;
         }
 
@@ -75,6 +158,28 @@ public sealed class SliceSkinPanel : ContentControl
                 region.Destination.Width,
                 region.Destination.Height));
         }
+    }
+
+    private void DrawFallback(DrawingContext drawingContext)
+    {
+        if (ActualWidth <= 0d || ActualHeight <= 0d)
+        {
+            return;
+        }
+
+        double borderWidth = Math.Max(0d, Math.Max(
+            Math.Max(FallbackBorderThickness.Left, FallbackBorderThickness.Top),
+            Math.Max(FallbackBorderThickness.Right, FallbackBorderThickness.Bottom)));
+        Pen? pen = borderWidth > 0d ? new Pen(FallbackBorderBrush, borderWidth) : null;
+        CornerRadius radius = FallbackCornerRadius;
+        double radiusX = Math.Max(0d, Math.Max(radius.TopLeft, radius.BottomLeft));
+        double radiusY = Math.Max(0d, Math.Max(radius.TopRight, radius.BottomRight));
+        drawingContext.DrawRoundedRectangle(
+            FallbackBackground,
+            pen,
+            new Rect(borderWidth / 2d, borderWidth / 2d, Math.Max(0d, ActualWidth - borderWidth), Math.Max(0d, ActualHeight - borderWidth)),
+            radiusX,
+            radiusY);
     }
 
     private static BitmapSource? LoadBitmap(string resourcePath)
