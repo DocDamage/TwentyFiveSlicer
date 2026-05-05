@@ -79,3 +79,9 @@ crashlytics-build.properties
 DesktopApp/**/bin/
 DesktopApp/**/obj/
 
+# Local third-party asset drops. Curated imports live under DesktopApp/TwentyFiveSlicer.Desktop/Assets.
+candy_pixel_art_gui/
+
+# Local generated asset audits.
+AssetAudits/
+

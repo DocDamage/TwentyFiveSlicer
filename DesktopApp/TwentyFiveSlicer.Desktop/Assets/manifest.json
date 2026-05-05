@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "assets": [
+    { "id": "action.openImage", "path": "Assets/Icons/Tabler/photo-plus.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "action.loadJson", "path": "Assets/Icons/Tabler/file-import.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "action.saveJson", "path": "Assets/Icons/Tabler/device-floppy.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "action.copyJson", "path": "Assets/Icons/Tabler/copy.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "action.exportPng", "path": "Assets/Icons/Tabler/download.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "action.undo", "path": "Assets/Icons/Tabler/arrow-back-up.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "action.redo", "path": "Assets/Icons/Tabler/arrow-forward-up.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "ai.chat", "path": "Assets/Icons/Tabler/message-chatbot.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "ai.review.safe", "path": "Assets/Icons/Tabler/shield-check.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "ai.review.warning", "path": "Assets/Icons/Tabler/alert-triangle.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "ide.bridge", "path": "Assets/Icons/Tabler/terminal-2.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
+    { "id": "provider.openai", "path": "Assets/Icons/SimpleIcons/openai.svg", "source": "Simple Icons", "license": "CC0-1.0", "kind": "brand", "fallbackText": "ChatGPT" },
+    { "id": "provider.anthropic", "path": "Assets/Icons/SimpleIcons/anthropic.svg", "source": "Simple Icons", "license": "CC0-1.0", "kind": "brand", "fallbackText": "Claude" },
+    { "id": "provider.google", "path": "Assets/Icons/SimpleIcons/google.svg", "source": "Simple Icons", "license": "CC0-1.0", "kind": "brand", "fallbackText": "Gemini" },
+    { "id": "dev.github", "path": "Assets/Icons/Devicon/github-original.svg", "source": "Devicon", "license": "MIT", "kind": "brand", "fallbackText": "GitHub" },
+    { "id": "skin.button.normal", "path": "Assets/Skin/Candy/button-normal.png", "source": "Candy Pixel Art GUI", "license": "CC0-1.0", "kind": "skin" },
+    { "id": "skin.button.hover", "path": "Assets/Skin/Candy/button-hover.png", "source": "Candy Pixel Art GUI", "license": "CC0-1.0", "kind": "skin" },
+    { "id": "skin.button.pressed", "path": "Assets/Skin/Candy/button-pressed.png", "source": "Candy Pixel Art GUI", "license": "CC0-1.0", "kind": "skin" },
+    { "id": "skin.panel.default", "path": "Assets/Skin/Candy/panel-default.png", "source": "Candy Pixel Art GUI", "license": "CC0-1.0", "kind": "skin" },
+    { "id": "skin.panel.subtle", "path": "Assets/Skin/Candy/panel-subtle.png", "source": "Candy Pixel Art GUI", "license": "CC0-1.0", "kind": "skin" },
+    { "id": "skin.input.area", "path": "Assets/Skin/Candy/input-area.png", "source": "Candy Pixel Art GUI", "license": "CC0-1.0", "kind": "skin" },
+    { "id": "skin.input.areaHover", "path": "Assets/Skin/Candy/input-area-hover.png", "source": "Candy Pixel Art GUI", "license": "CC0-1.0", "kind": "skin" },
+    { "id": "skin.window.plain", "path": "Assets/Skin/Candy/window-plain.png", "source": "Candy Pixel Art GUI", "license": "CC0-1.0", "kind": "skin" },
+    { "id": "skin.window.framed", "path": "Assets/Skin/Candy/window-framed.png", "source": "Candy Pixel Art GUI", "license": "CC0-1.0", "kind": "skin" }
+  ]
+}

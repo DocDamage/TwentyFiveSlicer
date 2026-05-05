@@ -78,7 +78,14 @@ var tests = new (string Name, Action Test)[]
     ("SliceChatService creates reviewed cloud suggestion", SliceChatServiceCreatesReviewedCloudSuggestion),
     ("SliceChatService handles conversational edit request", SliceChatServiceHandlesConversationalEditRequest),
     ("SliceChatService recognizes proposal commands", SliceChatServiceRecognizesProposalCommands),
-    ("SliceChatService answers analysis without proposal", SliceChatServiceAnswersAnalysisWithoutProposal)
+    ("SliceChatService answers analysis without proposal", SliceChatServiceAnswersAnalysisWithoutProposal),
+    ("Third-party asset notices mention required sources", ThirdPartyAssetNoticesMentionRequiredSources),
+    ("UiAssetCatalog loads manifest assets", UiAssetCatalogLoadsManifestAssets),
+    ("UiAssetCatalog rejects duplicate ids", UiAssetCatalogRejectsDuplicateIds),
+    ("UiAssetCatalog registered files exist", UiAssetCatalogRegisteredFilesExist),
+    ("Candy skin stretch assets include slice metadata", CandySkinStretchAssetsIncludeSliceMetadata),
+    ("Cloud AI provider labels prefer friendly names", CloudAiProviderLabelsPreferFriendlyNames),
+    ("Slice concept diagram renders", SliceConceptDiagramRenders)
 };
 
 int failures = 0;
@@ -114,6 +121,120 @@ static void SliceHistoryRestoresUndoAndRedoStates()
     Assert.True(history.CanRedo, "Redo should be available after undo.");
     SliceEditorState second = history.Redo();
     Assert.Equal(10d, second.VerticalBorders[0], "Redo should restore the pushed vertical border.");
+}
+
+static void ThirdPartyAssetNoticesMentionRequiredSources()
+{
+    string noticesPath = Path.Combine(DesktopProjectRoot(), "Assets", "THIRD_PARTY_NOTICES.md");
+    string notices = File.ReadAllText(noticesPath);
+
+    Assert.True(notices.Contains("Candy Pixel Art GUI", StringComparison.Ordinal), "Candy Pixel Art GUI notice should be present.");
+    Assert.True(notices.Contains("Tabler Icons", StringComparison.Ordinal), "Tabler Icons notice should be present.");
+    Assert.True(notices.Contains("Simple Icons", StringComparison.Ordinal), "Simple Icons notice should be present.");
+    Assert.True(notices.Contains("Devicon", StringComparison.Ordinal), "Devicon notice should be present.");
+}
+
+static void UiAssetCatalogLoadsManifestAssets()
+{
+    string manifestPath = Path.Combine(DesktopProjectRoot(), "Assets", "manifest.json");
+    UiAssetCatalog catalog = UiAssetCatalog.LoadFromFile(manifestPath);
+
+    UiAssetDescriptor saveIcon = catalog.GetRequired("action.saveJson");
+
+    Assert.Equal("Assets/Icons/Tabler/device-floppy.svg", saveIcon.Path, "The Save JSON icon should resolve from the manifest.");
+    Assert.Equal("MIT", saveIcon.License, "Tabler icons should be recorded as MIT licensed.");
+}
+
+static void UiAssetCatalogRejectsDuplicateIds()
+{
+    string tempFile = Path.Combine(Path.GetTempPath(), $"twenty-five-slicer-assets-{Guid.NewGuid():N}.json");
+    File.WriteAllText(tempFile, """
+        {
+          "version": 1,
+          "assets": [
+            { "id": "action.saveJson", "path": "one.svg", "source": "Test", "license": "MIT", "kind": "icon" },
+            { "id": "action.saveJson", "path": "two.svg", "source": "Test", "license": "MIT", "kind": "icon" }
+          ]
+        }
+        """);
+
+    try
+    {
+        Assert.Throws<InvalidDataException>(() => UiAssetCatalog.LoadFromFile(tempFile), "Duplicate ids should be rejected.");
+    }
+    finally
+    {
+        File.Delete(tempFile);
+    }
+}
+
+static void UiAssetCatalogRegisteredFilesExist()
+{
+    string desktopRoot = DesktopProjectRoot();
+    string manifestPath = Path.Combine(desktopRoot, "Assets", "manifest.json");
+    UiAssetCatalog catalog = UiAssetCatalog.LoadFromFile(manifestPath);
+
+    foreach (UiAssetDescriptor asset in catalog.Assets)
+    {
+        string assetPath = Path.Combine(desktopRoot, asset.Path.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(assetPath) && string.IsNullOrWhiteSpace(asset.FallbackText))
+        {
+            throw new FileNotFoundException($"Registered UI asset '{asset.Id}' is missing and has no fallback text.", assetPath);
+        }
+    }
+}
+
+static void CandySkinStretchAssetsIncludeSliceMetadata()
+{
+    string desktopRoot = DesktopProjectRoot();
+    string manifestPath = Path.Combine(desktopRoot, "Assets", "manifest.json");
+    UiAssetCatalog catalog = UiAssetCatalog.LoadFromFile(manifestPath);
+
+    foreach (UiAssetDescriptor asset in catalog.Assets.Where(asset => asset.Kind.Equals("skin", StringComparison.OrdinalIgnoreCase)))
+    {
+        string pngPath = Path.Combine(desktopRoot, asset.Path.Replace('/', Path.DirectorySeparatorChar));
+        string slicePath = Path.ChangeExtension(pngPath, ".25slice.json");
+
+        Assert.True(File.Exists(pngPath), $"Skin PNG should exist for {asset.Id}.");
+        Assert.True(File.Exists(slicePath), $"Stretch skin asset {asset.Id} should have adjacent .25slice.json metadata.");
+
+        string json = File.ReadAllText(slicePath);
+        TwentyFiveSliceData? sliceData = JsonSerializer.Deserialize<TwentyFiveSliceData>(json);
+        Assert.True(sliceData is not null, $"Slice metadata for {asset.Id} should deserialize.");
+        Assert.Equal(4, sliceData!.VerticalBorders.Length, $"Slice metadata for {asset.Id} should include four vertical borders.");
+        Assert.Equal(4, sliceData.HorizontalBorders.Length, $"Slice metadata for {asset.Id} should include four horizontal borders.");
+    }
+}
+
+static void CloudAiProviderLabelsPreferFriendlyNames()
+{
+    Assert.Equal("ChatGPT", CloudAiProviderLabelFormatter.Format("OpenAI / ChatGPT"), "OpenAI display should prefer the user-facing ChatGPT label.");
+    Assert.Equal("Claude", CloudAiProviderLabelFormatter.Format("Anthropic Claude"), "Anthropic display should prefer the user-facing Claude label.");
+    Assert.Equal("Gemini", CloudAiProviderLabelFormatter.Format("Google Gemini"), "Google display should prefer the user-facing Gemini label.");
+    Assert.Equal("Moonshot Kimi", CloudAiProviderLabelFormatter.Format("Moonshot Kimi"), "Unknown labels should remain unchanged.");
+}
+
+static void SliceConceptDiagramRenders()
+{
+    RunOnStaThread(() =>
+    {
+        var control = new SliceConceptDiagramControl
+        {
+            Width = 220d,
+            Height = 140d
+        };
+
+        control.Measure(new Size(220d, 140d));
+        control.Arrange(new Rect(0d, 0d, 220d, 140d));
+        control.UpdateLayout();
+
+        var bitmap = new RenderTargetBitmap(220, 140, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(control);
+
+        Assert.Equal(220, bitmap.PixelWidth, "Diagram render should preserve requested width.");
+        Assert.Equal(140, bitmap.PixelHeight, "Diagram render should preserve requested height.");
+        Assert.True(BitmapHasVisiblePixels(bitmap), "Diagram render should include visible pixels.");
+    });
 }
 
 static void LayoutCalculatorMatchesUnityFixedStretchDistribution()
@@ -1348,6 +1469,11 @@ static CloudAiImageInput CreateCloudImage()
     return new CloudAiImageInput("image/png", "abc123");
 }
 
+static string DesktopProjectRoot()
+{
+    return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "TwentyFiveSlicer.Desktop"));
+}
+
 static bool BitmapHasVisiblePixels(BitmapSource bitmap)
 {
     var pixels = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4];
@@ -1441,6 +1567,25 @@ static class Assert
         {
             throw new InvalidOperationException("Expected collection to contain a matching item.");
         }
+    }
+
+    public static void Throws<TException>(Action action, string message)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException($"{message} Expected {typeof(TException).Name}, got {exception.GetType().Name}.", exception);
+        }
+
+        throw new InvalidOperationException($"{message} Expected {typeof(TException).Name}.");
     }
 }
 

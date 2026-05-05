@@ -218,6 +218,18 @@ The desktop app preserves the important behavior from the Unity package:
 - Built-in presets, user presets, candidate preview/apply workflow, and batch checks across common target sizes.
 - Batch export common preview sizes to a folder.
 
+### Desktop Visual Assets
+
+The standalone desktop app keeps third-party visual assets in a small curated layer:
+
+- Candy Pixel Art GUI for reviewed, slice-safe skin PNGs.
+- Tabler Icons for generic MIT-licensed app/tool SVG icons.
+- Simple Icons only for provider brand badges when brand use is appropriate.
+- Devicon only for IDE/developer-tool badges when brand use is appropriate.
+- TwentyFiveSlicer-specific slice diagrams are drawn natively in WPF so they stay accurate to the 25-slice model.
+
+Third-party notices live in `DesktopApp/TwentyFiveSlicer.Desktop/Assets/THIRD_PARTY_NOTICES.md`. New assets must be registered in `DesktopApp/TwentyFiveSlicer.Desktop/Assets/manifest.json` and covered by tests. Raw vendor drops such as `candy_pixel_art_gui/` are intentionally ignored; only curated imports should be committed.
+
 ### Unity JSON Bridge
 
 The Unity package can import and export the same JSON files as the standalone desktop app:

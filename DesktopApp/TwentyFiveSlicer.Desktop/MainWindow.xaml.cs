@@ -341,9 +341,10 @@ public partial class MainWindow : Window
         string prompt = BuildCloudAiPrompt();
         CloudAiSettings settings = CreateCloudAiSettings();
         CloudAiImageInput? image = CreateCloudAiImageInput(provider);
+        string providerLabel = CloudAiProviderLabelFormatter.Format(provider.DisplayName);
         AssistantResultText.Text = image is null
-            ? $"Asking {provider.DisplayName}..."
-            : $"Asking {provider.DisplayName} with image context...";
+            ? $"Asking {providerLabel}..."
+            : $"Asking {providerLabel} with image context...";
 
         CloudAiResult result = await _cloudAiClient.AskAsync(provider, settings, prompt, image);
         if (!result.Success)
@@ -374,15 +375,15 @@ public partial class MainWindow : Window
             {
                 ApplySliceData(suggestedSliceData);
                 RememberCurrentState();
-                AssistantResultText.Text = $"Cloud AI ({provider.DisplayName}) advice passed deterministic review and was applied.\nScore: {review.Score:P0}\n{FormatSuggestionReview(review)}\n\nAdvice:\n{result.Advice}";
+                AssistantResultText.Text = $"Cloud AI ({providerLabel}) advice passed deterministic review and was applied.\nScore: {review.Score:P0}\n{FormatSuggestionReview(review)}\n\nAdvice:\n{result.Advice}";
                 return;
             }
 
-            AssistantResultText.Text = $"Cloud AI ({provider.DisplayName}) suggested borders, but deterministic review did not auto-apply them.\nScore: {review.Score:P0}\n{FormatSuggestionReview(review)}\n\nAdvice:\n{result.Advice}";
+            AssistantResultText.Text = $"Cloud AI ({providerLabel}) suggested borders, but deterministic review did not auto-apply them.\nScore: {review.Score:P0}\n{FormatSuggestionReview(review)}\n\nAdvice:\n{result.Advice}";
             return;
         }
 
-        AssistantResultText.Text = $"Cloud AI ({provider.DisplayName}) advice:\n{result.Advice}";
+        AssistantResultText.Text = $"Cloud AI ({providerLabel}) advice:\n{result.Advice}";
     }
 
     private void OptimizeButton_Click(object sender, RoutedEventArgs e)
@@ -507,7 +508,7 @@ public partial class MainWindow : Window
         CloudAiProviderDescriptor? provider = GetSelectedCloudAiProvider();
         AssistantResultText.Text = provider is null
             ? "Cloud AI settings saved."
-            : $"Cloud AI settings saved for {provider.DisplayName}. API keys are read from environment variables, not app state.";
+            : $"Cloud AI settings saved for {CloudAiProviderLabelFormatter.Format(provider.DisplayName)}. API keys are read from environment variables, not app state.";
     }
 
     private void CloudAiProviderComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1180,7 +1181,7 @@ public partial class MainWindow : Window
             return new SliceChatResponse("Choose a cloud AI provider before using cloud chat.", null, null);
         }
 
-        AddChatMessage($"Assistant: Asking {provider.DisplayName}...");
+        AddChatMessage($"Assistant: Asking {CloudAiProviderLabelFormatter.Format(provider.DisplayName)}...");
         CloudAiResult result = await _cloudAiClient.AskAsync(
             provider,
             CreateCloudAiSettings(),

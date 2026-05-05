@@ -8,4 +8,11 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\**\*.svg" />
+    <Resource Include="Assets\**\*.png" />
+    <Resource Include="Assets\**\*.json" />
+    <None Include="Assets\THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

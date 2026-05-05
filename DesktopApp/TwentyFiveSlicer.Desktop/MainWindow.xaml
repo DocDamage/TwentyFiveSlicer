@@ -64,6 +64,12 @@
             </Setter>
         </Style>
 
+        <Style x:Key="IconActionButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="MinWidth" Value="36" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="ToolTipService.ShowDuration" Value="30000" />
+        </Style>
+
         <Style x:Key="LabelStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="FontSize" Value="14" />
@@ -393,6 +399,10 @@
                                            Foreground="{StaticResource MutedTextBrush}"
                                            TextWrapping="Wrap"
                                            Text="Batch checks will test common target sizes." />
+                                <controls:SliceConceptDiagramControl Width="220"
+                                                                     Height="140"
+                                                                     HorizontalAlignment="Left"
+                                                                     Margin="0,14,0,0" />
                             </StackPanel>
                         </Border>
 
