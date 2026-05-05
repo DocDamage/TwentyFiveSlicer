@@ -432,6 +432,9 @@ static void MainWindowUsesSkinnedCardSurfaces()
     int skinnedCardCount = CountOccurrences(xaml, "Style=\"{StaticResource SkinnedCardStyle}\"");
     Assert.True(skinnedCardCount >= 6, "Sidebar cards should use the reusable sliced skin panel style.");
     Assert.True(xaml.Contains("x:Key=\"SkinnedCardStyle\"", StringComparison.Ordinal), "Main window should define the skinned card style.");
+    Assert.True(xaml.Contains("<ColumnDefinition Width=\"440\" MinWidth=\"420\" />", StringComparison.Ordinal), "Sidebar should keep enough width for skinned controls.");
+    Assert.True(xaml.Contains("<Setter Property=\"MinWidth\" Value=\"132\" />", StringComparison.Ordinal), "Action buttons should have a minimum width that protects labels.");
+    Assert.True(CountOccurrences(xaml, "<UniformGrid Columns=\"2\"") >= 3, "Dense command groups should use two-column grids instead of clipping in narrow wraps.");
 }
 
 static void MainWindowExposesCandySkinToggleAndButtonSkin()

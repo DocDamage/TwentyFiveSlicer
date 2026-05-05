@@ -49,13 +49,17 @@
         </Style>
 
         <Style x:Key="ActionButtonStyle" TargetType="Button">
-            <Setter Property="Margin" Value="0,0,10,10" />
-            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="MinWidth" Value="132" />
+            <Setter Property="MinHeight" Value="38" />
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="Background" Value="{StaticResource AccentBrush}" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="FontSize" Value="14" />
             <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -125,7 +129,7 @@
         </Grid.Background>
 
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="380" />
+            <ColumnDefinition Width="440" MinWidth="420" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
@@ -152,7 +156,7 @@
                               Checked="CandySkinChanged"
                               Unchecked="CandySkinChanged" />
 
-                    <WrapPanel Margin="0,18,0,12">
+                    <UniformGrid Columns="2" Margin="0,18,0,12">
                         <Button Style="{StaticResource ActionButtonStyle}" Click="OpenImage_Click" ToolTip="Open image">
                             <StackPanel Orientation="Horizontal">
                                 <controls:SvgIcon Source="Assets/Icons/Tabler/photo-plus.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
@@ -201,7 +205,7 @@
                                 <TextBlock Text="Redo" />
                             </StackPanel>
                         </Button>
-                    </WrapPanel>
+                    </UniformGrid>
                 </StackPanel>
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -388,7 +392,7 @@
                                          AcceptsReturn="True"
                                          Text="make this a button"
                                          KeyDown="ChatInputBox_KeyDown" />
-                                <WrapPanel>
+                                <UniformGrid Columns="2">
                                     <Button Style="{StaticResource ActionButtonStyle}" Click="SendChat_Click" ToolTip="Send chat">
                                         <StackPanel Orientation="Horizontal">
                                             <controls:SvgIcon Source="Assets/Icons/Tabler/message-chatbot.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
@@ -413,7 +417,7 @@
                                             <TextBlock Text="Reject Proposal" />
                                         </StackPanel>
                                     </Button>
-                                </WrapPanel>
+                                </UniformGrid>
                                 <TextBox x:Name="AssistantPromptBox"
                                          Margin="0,12,0,10"
                                          MinHeight="58"
@@ -465,7 +469,7 @@
                                 <ComboBox x:Name="CandidateComboBox"
                                           Margin="0,0,0,10"
                                           DisplayMemberPath="Name" />
-                                <WrapPanel>
+                                <UniformGrid Columns="2">
                                     <Button Style="{StaticResource ActionButtonStyle}" Click="SuggestBorders_Click" ToolTip="Suggest borders from image">
                                         <StackPanel Orientation="Horizontal">
                                             <controls:SvgIcon Source="Assets/Icons/Tabler/sparkles.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
@@ -532,7 +536,7 @@
                                             <TextBlock Text="Delete Secure Key" />
                                         </StackPanel>
                                     </Button>
-                                </WrapPanel>
+                                </UniformGrid>
                                 <TextBlock x:Name="AssistantResultText"
                                            Margin="0,8,0,0"
                                            Foreground="{StaticResource MutedTextBrush}"
