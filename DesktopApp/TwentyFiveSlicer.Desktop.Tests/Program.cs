@@ -64,7 +64,9 @@ var tests = new (string Name, Action Test)[]
     ("CloudAiAdviceParser extracts spaced percentage labels", CloudAiAdviceParserExtractsSpacedPercentageLabels),
     ("IdeAssistantBridge returns discoverable provider JSON", IdeAssistantBridgeReturnsDiscoverableProviderJson),
     ("IdeAssistantBridge returns local analysis JSON", IdeAssistantBridgeReturnsLocalAnalysisJson),
-    ("IdeAssistantBridge applies prompt as JSON", IdeAssistantBridgeAppliesPromptAsJson)
+    ("IdeAssistantBridge applies prompt as JSON", IdeAssistantBridgeAppliesPromptAsJson),
+    ("IdeAssistantBridge returns prompt preview JSON", IdeAssistantBridgeReturnsPromptPreviewJson),
+    ("IdeAssistantBridge returns structured error JSON", IdeAssistantBridgeReturnsStructuredErrorJson)
 };
 
 int failures = 0;
@@ -1054,6 +1056,35 @@ static void IdeAssistantBridgeAppliesPromptAsJson()
     JsonElement sliceData = root.GetProperty("sliceData");
     Assert.Equal(10d, sliceData.GetProperty("verticalBorders")[0].GetDouble(), "Apply output should include Unity-compatible vertical borders.");
     Assert.Equal(90d, sliceData.GetProperty("verticalBorders")[3].GetDouble(), "Apply output should include Unity-compatible vertical borders.");
+}
+
+static void IdeAssistantBridgeReturnsPromptPreviewJson()
+{
+    var input = new IdeAssistantInput(
+        new TwentyFiveSliceData([12d, 42d, 58d, 88d], [10d, 40d, 60d, 90d]),
+        SourceWidth: 256d,
+        SourceHeight: 128d,
+        TargetWidth: 640d,
+        TargetHeight: 160d);
+
+    string json = IdeAssistantBridge.BuildPromptJson(input, "make this safer for a wide button");
+    using JsonDocument document = JsonDocument.Parse(json);
+    JsonElement root = document.RootElement;
+
+    Assert.Equal("twenty-five-slicer.ai.prompt.v1", root.GetProperty("schema").GetString(), "Prompt output should expose a stable schema name.");
+    Assert.True(root.GetProperty("prompt").GetString()!.Contains("make this safer", StringComparison.OrdinalIgnoreCase), "Prompt preview should include the user request.");
+    Assert.True(root.GetProperty("sliceData").GetProperty("verticalBorders").GetArrayLength() == 4, "Prompt preview should include the slice data being analyzed.");
+}
+
+static void IdeAssistantBridgeReturnsStructuredErrorJson()
+{
+    string json = IdeAssistantBridge.ErrorJson("Missing required option --slice.", "ArgumentError");
+    using JsonDocument document = JsonDocument.Parse(json);
+    JsonElement root = document.RootElement;
+
+    Assert.Equal("twenty-five-slicer.ai.error.v1", root.GetProperty("schema").GetString(), "Error output should expose a stable schema name.");
+    Assert.Equal("ArgumentError", root.GetProperty("errorCode").GetString(), "Error output should include a machine-readable code.");
+    Assert.Equal("Missing required option --slice.", root.GetProperty("message").GetString(), "Error output should include the display message.");
 }
 
 static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int left, int right, int top, int bottom)

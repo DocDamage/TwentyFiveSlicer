@@ -78,6 +78,34 @@ public static class IdeAssistantBridge
         return JsonSerializer.Serialize(payload, JsonOptions);
     }
 
+    public static string BuildPromptJson(IdeAssistantInput input, string userPrompt)
+    {
+        var payload = new
+        {
+            schema = "twenty-five-slicer.ai.prompt.v1",
+            prompt = BuildPrompt(input, userPrompt),
+            sliceData = input.SliceData,
+            input.SourceWidth,
+            input.SourceHeight,
+            input.TargetWidth,
+            input.TargetHeight
+        };
+
+        return JsonSerializer.Serialize(payload, JsonOptions);
+    }
+
+    public static string ErrorJson(string message, string errorCode = "Error")
+    {
+        var payload = new
+        {
+            schema = "twenty-five-slicer.ai.error.v1",
+            errorCode,
+            message
+        };
+
+        return JsonSerializer.Serialize(payload, JsonOptions);
+    }
+
     public static async Task<string> AskCloudJsonAsync(
         IdeAssistantInput input,
         string providerId,

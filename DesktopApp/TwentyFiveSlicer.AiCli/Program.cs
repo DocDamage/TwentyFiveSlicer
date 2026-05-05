@@ -17,6 +17,7 @@ try
         "providers" => IdeAssistantBridge.ListProvidersJson(),
         "analyze" => IdeAssistantBridge.AnalyzeLocalJson(ReadInput(options)),
         "apply" => IdeAssistantBridge.ApplyPromptJson(ReadInput(options), GetOption(options, "prompt", "make practical improvements")),
+        "prompt" => IdeAssistantBridge.BuildPromptJson(ReadInput(options), GetOption(options, "prompt", "analyze and recommend improvements")),
         "cloud" => await RunCloudAsync(options),
         _ => throw new InvalidOperationException($"Unknown command '{args[0]}'.")
     };
@@ -26,7 +27,7 @@ try
 }
 catch (Exception exception)
 {
-    Console.Error.WriteLine(exception.Message);
+    Console.WriteLine(IdeAssistantBridge.ErrorJson(exception.Message, exception.GetType().Name));
     return 1;
 }
 
@@ -52,7 +53,9 @@ static async Task<string> RunCloudAsync(Dictionary<string, string> options)
 static IdeAssistantInput ReadInput(Dictionary<string, string> options)
 {
     string slicePath = GetRequiredOption(options, "slice");
-    string json = File.ReadAllText(slicePath);
+    string json = slicePath == "-"
+        ? Console.In.ReadToEnd()
+        : File.ReadAllText(slicePath);
     TwentyFiveSliceData sliceData = JsonSerializer.Deserialize<TwentyFiveSliceData>(json)
         ?? throw new InvalidDataException("Slice JSON did not contain valid 25-slice data.");
 
@@ -156,8 +159,10 @@ static void PrintHelp()
       providers
       analyze --slice slice.json --source-width 100 --source-height 100 --target-width 640 --target-height 360
       apply --slice slice.json --prompt "make this a button"
+      prompt --slice slice.json --prompt "recommend borders"
       cloud --slice slice.json --provider openai --prompt "recommend borders" [--model gpt-5.1] [--api-key-env OPENAI_API_KEY] [--endpoint URL] [--image image.png]
 
-    Output is JSON so IDE agents such as Codex can parse it directly.
+    Use --slice - to read Unity-compatible slice JSON from stdin.
+    Output is JSON so IDE agents such as Codex can parse it directly, including errors.
     """);
 }
