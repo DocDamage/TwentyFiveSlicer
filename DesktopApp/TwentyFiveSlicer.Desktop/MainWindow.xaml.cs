@@ -94,6 +94,7 @@ public partial class MainWindow : Window
         }
 
         SliceSkinPanel.SetCandySkinEnabled(this, CandySkinCheckBox.IsChecked == true);
+        SaveAppState();
     }
 
     private void OpenImage_Click(object sender, RoutedEventArgs e)
@@ -1427,6 +1428,7 @@ public partial class MainWindow : Window
             SourceGuides = SourceComparisonCheckBox.IsChecked == true,
             FlipX = FlipXCheckBox.IsChecked == true,
             FlipY = FlipYCheckBox.IsChecked == true,
+            CandySkinEnabled = CandySkinCheckBox.IsChecked == true,
             AssistantOutput = AssistantResultText.Text,
             ChatMessages = _chatMessages.ToList()
         };
@@ -1452,6 +1454,8 @@ public partial class MainWindow : Window
             SourceComparisonCheckBox.IsChecked = session.SourceGuides;
             FlipXCheckBox.IsChecked = session.FlipX;
             FlipYCheckBox.IsChecked = session.FlipY;
+            CandySkinCheckBox.IsChecked = session.CandySkinEnabled;
+            SliceSkinPanel.SetCandySkinEnabled(this, session.CandySkinEnabled);
             _isUpdatingUi = false;
 
             SetTargetSize(session.TargetWidth, session.TargetHeight);

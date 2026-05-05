@@ -930,6 +930,7 @@ static void AppStateStoreRoundTripsLastSession()
             SourceGuides = true,
             FlipX = true,
             FlipY = false,
+            CandySkinEnabled = false,
             AssistantOutput = "Best fit: Button",
             ChatMessages = ["You: make this a button", "Assistant: proposal ready"]
         }
@@ -948,6 +949,7 @@ static void AppStateStoreRoundTripsLastSession()
         Assert.Equal(25d, session.PreviewPanX, "Preview horizontal pan should round trip.");
         Assert.Equal(-18d, session.PreviewPanY, "Preview vertical pan should round trip.");
         Assert.Equal(true, session.KeepAspect, "Toggle state should round trip.");
+        Assert.Equal(false, session.CandySkinEnabled, "Candy skin state should round trip.");
         Assert.Equal(88d, session.SliceData.VerticalBorders[3], "Slice data should round trip.");
         Assert.Equal("Best fit: Button", session.AssistantOutput, "Assistant output should round trip.");
         Assert.SequenceEqual(new[] { "You: make this a button", "Assistant: proposal ready" }, session.ChatMessages);
