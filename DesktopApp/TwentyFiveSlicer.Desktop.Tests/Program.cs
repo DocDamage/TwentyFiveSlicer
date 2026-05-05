@@ -4,12 +4,17 @@ using System.Net.Http.Headers;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using TwentyFiveSlicer.Desktop.Controls;
 using TwentyFiveSlicer.Desktop.Models;
 using TwentyFiveSlicer.Desktop.Services;
 
 var tests = new (string Name, Action Test)[]
 {
     ("SliceHistory restores undo and redo states", SliceHistoryRestoresUndoAndRedoStates),
+    ("Layout calculator matches Unity fixed stretch distribution", LayoutCalculatorMatchesUnityFixedStretchDistribution),
+    ("Layout calculator scales fixed regions when target is too small", LayoutCalculatorScalesFixedRegionsWhenTargetIsTooSmall),
+    ("Layout calculator flips source regions without moving destinations", LayoutCalculatorFlipsSourceRegionsWithoutMovingDestinations),
+    ("Preview control renders export bitmap", PreviewControlRendersExportBitmap),
     ("SliceValidation warns when fixed columns exceed target width", SliceValidationWarnsWhenFixedColumnsExceedTargetWidth),
     ("RecentFileList keeps newest unique files first", RecentFileListKeepsNewestUniqueFilesFirst),
     ("BatchPreviewAnalyzer returns warnings per target", BatchPreviewAnalyzerReturnsWarningsPerTarget),
@@ -82,6 +87,100 @@ static void SliceHistoryRestoresUndoAndRedoStates()
     Assert.True(history.CanRedo, "Redo should be available after undo.");
     SliceEditorState second = history.Redo();
     Assert.Equal(10d, second.VerticalBorders[0], "Redo should restore the pushed vertical border.");
+}
+
+static void LayoutCalculatorMatchesUnityFixedStretchDistribution()
+{
+    var data = new TwentyFiveSliceData([10d, 30d, 70d, 90d], [10d, 30d, 70d, 90d]);
+
+    IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(
+        sourceWidth: 100d,
+        sourceHeight: 100d,
+        targetWidth: 160d,
+        targetHeight: 120d,
+        data);
+
+    Assert.Equal(25, regions.Count, "All 25 regions should render when every source and destination segment has size.");
+    SliceRegion first = regions.Single(region => region.Column == 0 && region.Row == 0);
+    Assert.Equal(10d, first.Destination.Width, "Left fixed column should keep original source width.");
+    Assert.Equal(10d, first.Destination.Height, "Top fixed row should keep original source height.");
+
+    SliceRegion stretchColumn = regions.Single(region => region.Column == 1 && region.Row == 0);
+    Assert.Equal(50d, stretchColumn.Destination.Width, "Stretch columns should receive proportional remaining width.");
+
+    SliceRegion center = regions.Single(region => region.Column == 2 && region.Row == 2);
+    Assert.Equal(60d, center.Destination.X, "Center fixed column should start after fixed and stretched columns.");
+    Assert.Equal(40d, center.Destination.Y, "Center fixed row should start after fixed and stretched rows.");
+    Assert.Equal(40d, center.Destination.Width, "Center fixed column should preserve original width.");
+    Assert.Equal(40d, center.Destination.Height, "Center fixed row should preserve original height.");
+
+    SliceRegion last = regions.Single(region => region.Column == 4 && region.Row == 4);
+    Assert.Equal(150d, last.Destination.X, "Right fixed column should end at target width.");
+    Assert.Equal(110d, last.Destination.Y, "Bottom fixed row should end at target height.");
+}
+
+static void LayoutCalculatorScalesFixedRegionsWhenTargetIsTooSmall()
+{
+    var data = new TwentyFiveSliceData([10d, 30d, 70d, 90d], [10d, 30d, 70d, 90d]);
+
+    IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(
+        sourceWidth: 100d,
+        sourceHeight: 100d,
+        targetWidth: 30d,
+        targetHeight: 100d,
+        data);
+
+    Assert.Equal(15, regions.Count, "Stretch columns should collapse when fixed columns exceed target width.");
+    Assert.True(regions.All(region => region.Column is 0 or 2 or 4), "Only fixed columns should remain when width is below fixed total.");
+    SliceRegion left = regions.First(region => region.Column == 0);
+    SliceRegion middle = regions.First(region => region.Column == 2);
+    SliceRegion right = regions.First(region => region.Column == 4);
+    Assert.Equal(5d, left.Destination.Width, "Left fixed column should scale down proportionally.");
+    Assert.Equal(20d, middle.Destination.Width, "Center fixed column should scale down proportionally.");
+    Assert.Equal(5d, right.Destination.Width, "Right fixed column should scale down proportionally.");
+}
+
+static void LayoutCalculatorFlipsSourceRegionsWithoutMovingDestinations()
+{
+    var data = new TwentyFiveSliceData([10d, 30d, 70d, 90d], [10d, 30d, 70d, 90d]);
+
+    IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(
+        sourceWidth: 100d,
+        sourceHeight: 100d,
+        targetWidth: 160d,
+        targetHeight: 120d,
+        data,
+        flipX: true,
+        flipY: true);
+
+    SliceRegion first = regions.Single(region => region.Column == 0 && region.Row == 0);
+    Assert.Equal(0d, first.Destination.X, "Flip should not move destination columns.");
+    Assert.Equal(0d, first.Destination.Y, "Flip should not move destination rows.");
+    Assert.Equal(90d, first.Source.X, "Flip X should sample the opposite source column.");
+    Assert.Equal(90d, first.Source.Y, "Flip Y should sample the opposite source row.");
+}
+
+static void PreviewControlRendersExportBitmap()
+{
+    RunOnStaThread(() =>
+    {
+        var preview = new TwentyFiveSlicePreviewControl
+        {
+            SourceImage = CreateTransparentPaddingBitmap(16, 16, 0, 0, 0, 0),
+            SliceData = new TwentyFiveSliceData([25d, 40d, 60d, 75d], [25d, 40d, 60d, 75d]),
+            TargetWidth = 64d,
+            TargetHeight = 48d,
+            DebuggingView = true,
+            FlipX = true,
+            FlipY = true
+        };
+
+        BitmapSource bitmap = preview.RenderOutputBitmap(includeDebugOverlay: true);
+
+        Assert.Equal(64, bitmap.PixelWidth, "Export bitmap should use target width.");
+        Assert.Equal(48, bitmap.PixelHeight, "Export bitmap should use target height.");
+        Assert.True(BitmapHasVisiblePixels(bitmap), "Export bitmap should contain rendered pixels.");
+    });
 }
 
 static void SliceValidationWarnsWhenFixedColumnsExceedTargetWidth()
@@ -753,6 +852,46 @@ static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int le
 static CloudAiImageInput CreateCloudImage()
 {
     return new CloudAiImageInput("image/png", "abc123");
+}
+
+static bool BitmapHasVisiblePixels(BitmapSource bitmap)
+{
+    var pixels = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4];
+    bitmap.CopyPixels(pixels, bitmap.PixelWidth * 4, 0);
+
+    for (int index = 3; index < pixels.Length; index += 4)
+    {
+        if (pixels[index] > 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void RunOnStaThread(Action action)
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+        }
+    });
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure is not null)
+    {
+        throw failure;
+    }
 }
 
 static class Assert
