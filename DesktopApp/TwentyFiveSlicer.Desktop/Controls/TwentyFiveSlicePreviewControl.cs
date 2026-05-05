@@ -137,6 +137,11 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         PreviewZoom += (wheelDelta / 120d) * 0.05d;
     }
 
+    public void ResetPreviewZoom()
+    {
+        PreviewZoom = 1d;
+    }
+
     public bool GuideEditingEnabled
     {
         get => _guideEditingEnabled;

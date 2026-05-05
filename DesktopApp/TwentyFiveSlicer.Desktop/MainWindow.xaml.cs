@@ -524,6 +524,21 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ZoomOut_Click(object sender, RoutedEventArgs e)
+    {
+        PreviewControl.AdjustZoomFromMouseWheel(-120);
+    }
+
+    private void ResetZoom_Click(object sender, RoutedEventArgs e)
+    {
+        PreviewControl.ResetPreviewZoom();
+    }
+
+    private void ZoomIn_Click(object sender, RoutedEventArgs e)
+    {
+        PreviewControl.AdjustZoomFromMouseWheel(120);
+    }
+
     private void BorderSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (!_isWindowReady || _isUpdatingUi || sender is not Slider slider || slider.Tag is not string tag || tag.Length != 2)
