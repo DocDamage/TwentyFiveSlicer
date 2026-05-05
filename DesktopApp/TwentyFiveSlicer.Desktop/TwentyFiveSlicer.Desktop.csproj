@@ -6,12 +6,14 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\App\app-icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <Resource Include="Assets\**\*.svg" />
     <Resource Include="Assets\**\*.png" />
     <Resource Include="Assets\**\*.json" />
+    <Resource Include="Assets\App\app-icon.ico" />
     <None Include="Assets\THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

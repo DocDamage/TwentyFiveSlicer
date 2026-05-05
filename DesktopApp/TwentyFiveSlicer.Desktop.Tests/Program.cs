@@ -87,6 +87,8 @@ var tests = new (string Name, Action Test)[]
     ("Cloud AI provider labels prefer friendly names", CloudAiProviderLabelsPreferFriendlyNames),
     ("Cloud AI providers have badge icons", CloudAiProvidersHaveBadgeIcons),
     ("Registered SVG assets render", RegisteredSvgAssetsRender),
+    ("App icon assets exist", AppIconAssetsExist),
+    ("Slice skin panel renders Candy asset", SliceSkinPanelRendersCandyAsset),
     ("Slice concept diagram renders", SliceConceptDiagramRenders)
 };
 
@@ -247,6 +249,43 @@ static void RegisteredSvgAssetsRender()
         Assert.True(drawing.Bounds.Width > 0d, $"SVG asset {asset.Id} should render with positive width.");
         Assert.True(drawing.Bounds.Height > 0d, $"SVG asset {asset.Id} should render with positive height.");
     }
+}
+
+static void AppIconAssetsExist()
+{
+    string desktopRoot = DesktopProjectRoot();
+    string pngPath = Path.Combine(desktopRoot, "Assets", "App", "app-icon.png");
+    string icoPath = Path.Combine(desktopRoot, "Assets", "App", "app-icon.ico");
+
+    Assert.True(File.Exists(pngPath), "Generated app icon PNG should exist.");
+    Assert.True(File.Exists(icoPath), "Generated app icon ICO should exist.");
+    Assert.True(new FileInfo(pngPath).Length > 0, "Generated app icon PNG should not be empty.");
+    Assert.True(new FileInfo(icoPath).Length > 0, "Generated app icon ICO should not be empty.");
+}
+
+static void SliceSkinPanelRendersCandyAsset()
+{
+    RunOnStaThread(() =>
+    {
+        var control = new SliceSkinPanel
+        {
+            Source = "Assets/Skin/Candy/panel-subtle.png",
+            SliceDataSource = "Assets/Skin/Candy/panel-subtle.25slice.json",
+            Width = 260d,
+            Height = 120d
+        };
+
+        control.Measure(new Size(260d, 120d));
+        control.Arrange(new Rect(0d, 0d, 260d, 120d));
+        control.UpdateLayout();
+
+        var bitmap = new RenderTargetBitmap(260, 120, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(control);
+
+        Assert.Equal(260, bitmap.PixelWidth, "Skin panel render should preserve requested width.");
+        Assert.Equal(120, bitmap.PixelHeight, "Skin panel render should preserve requested height.");
+        Assert.True(BitmapHasVisiblePixels(bitmap), "Skin panel render should include visible pixels.");
+    });
 }
 
 static void SliceConceptDiagramRenders()

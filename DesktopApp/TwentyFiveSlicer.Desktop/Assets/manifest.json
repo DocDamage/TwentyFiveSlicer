@@ -1,6 +1,8 @@
 {
   "version": 1,
   "assets": [
+    { "id": "app.icon.png", "path": "Assets/App/app-icon.png", "source": "TwentyFiveSlicer", "license": "Project", "kind": "app" },
+    { "id": "app.icon.ico", "path": "Assets/App/app-icon.ico", "source": "TwentyFiveSlicer", "license": "Project", "kind": "app" },
     { "id": "action.openImage", "path": "Assets/Icons/Tabler/photo-plus.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
     { "id": "action.loadJson", "path": "Assets/Icons/Tabler/file-import.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },
     { "id": "action.saveJson", "path": "Assets/Icons/Tabler/device-floppy.svg", "source": "Tabler Icons", "license": "MIT", "kind": "icon" },

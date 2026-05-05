@@ -7,6 +7,7 @@
         xmlns:services="clr-namespace:TwentyFiveSlicer.Desktop.Services"
         mc:Ignorable="d"
         Title="Twenty Five Slicer Desktop"
+        Icon="Assets/App/app-icon.ico"
         Height="900"
         Width="1440"
         MinHeight="760"
@@ -496,9 +497,10 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Style="{StaticResource CardStyle}"
-                                Background="{StaticResource CardBrush}"
-                                Margin="0,0,0,14">
+                        <controls:SliceSkinPanel Source="Assets/Skin/Candy/panel-subtle.png"
+                                                 SliceDataSource="Assets/Skin/Candy/panel-subtle.25slice.json"
+                                                 Padding="18"
+                                                 Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="Checks"
                                            Foreground="{StaticResource TextBrush}"
@@ -519,7 +521,7 @@
                                                                      HorizontalAlignment="Left"
                                                                      Margin="0,14,0,0" />
                             </StackPanel>
-                        </Border>
+                        </controls:SliceSkinPanel>
 
                         <Border Style="{StaticResource CardStyle}"
                                 Background="{StaticResource CardBrush}"
