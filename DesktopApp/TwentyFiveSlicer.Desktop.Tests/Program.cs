@@ -85,6 +85,8 @@ var tests = new (string Name, Action Test)[]
     ("UiAssetCatalog registered files exist", UiAssetCatalogRegisteredFilesExist),
     ("Candy skin stretch assets include slice metadata", CandySkinStretchAssetsIncludeSliceMetadata),
     ("Cloud AI provider labels prefer friendly names", CloudAiProviderLabelsPreferFriendlyNames),
+    ("Cloud AI providers have badge icons", CloudAiProvidersHaveBadgeIcons),
+    ("Registered SVG assets render", RegisteredSvgAssetsRender),
     ("Slice concept diagram renders", SliceConceptDiagramRenders)
 };
 
@@ -212,6 +214,39 @@ static void CloudAiProviderLabelsPreferFriendlyNames()
     Assert.Equal("Claude", CloudAiProviderLabelFormatter.Format("Anthropic Claude"), "Anthropic display should prefer the user-facing Claude label.");
     Assert.Equal("Gemini", CloudAiProviderLabelFormatter.Format("Google Gemini"), "Google display should prefer the user-facing Gemini label.");
     Assert.Equal("Moonshot Kimi", CloudAiProviderLabelFormatter.Format("Moonshot Kimi"), "Unknown labels should remain unchanged.");
+}
+
+static void CloudAiProvidersHaveBadgeIcons()
+{
+    string desktopRoot = DesktopProjectRoot();
+    foreach (CloudAiProviderDescriptor provider in CloudAiProviderCatalog.GetAll())
+    {
+        string iconPath = CloudAiProviderIconCatalog.GetIconPath(provider.Id);
+        string filePath = Path.Combine(desktopRoot, iconPath.Replace('/', Path.DirectorySeparatorChar));
+
+        Assert.True(File.Exists(filePath), $"Provider {provider.Id} should resolve to an existing badge icon.");
+    }
+}
+
+static void RegisteredSvgAssetsRender()
+{
+    string desktopRoot = DesktopProjectRoot();
+    string manifestPath = Path.Combine(desktopRoot, "Assets", "manifest.json");
+    UiAssetCatalog catalog = UiAssetCatalog.LoadFromFile(manifestPath);
+
+    foreach (UiAssetDescriptor asset in catalog.Assets.Where(asset => asset.Path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)))
+    {
+        string filePath = Path.Combine(desktopRoot, asset.Path.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(filePath))
+        {
+            Assert.True(!string.IsNullOrWhiteSpace(asset.FallbackText), $"Missing SVG asset {asset.Id} should have fallback text.");
+            continue;
+        }
+
+        DrawingGroup drawing = SvgIconRenderer.LoadFile(filePath, Brushes.White);
+        Assert.True(drawing.Bounds.Width > 0d, $"SVG asset {asset.Id} should render with positive width.");
+        Assert.True(drawing.Bounds.Height > 0d, $"SVG asset {asset.Id} should render with positive height.");
+    }
 }
 
 static void SliceConceptDiagramRenders()

@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:controls="clr-namespace:TwentyFiveSlicer.Desktop.Controls"
+        xmlns:services="clr-namespace:TwentyFiveSlicer.Desktop.Services"
         mc:Ignorable="d"
         Title="Twenty Five Slicer Desktop"
         Height="900"
@@ -24,6 +25,7 @@
         <SolidColorBrush x:Key="AccentBrush" Color="#FF3CC7BA" />
         <SolidColorBrush x:Key="TextBrush" Color="#FFF6EFE2" />
         <SolidColorBrush x:Key="MutedTextBrush" Color="#FFA0B8B5" />
+        <services:CloudAiProviderIconPathConverter x:Key="ProviderIconPathConverter" />
 
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource PanelBrush}" />
@@ -120,14 +122,54 @@
                                TextWrapping="Wrap" />
 
                     <WrapPanel Margin="0,18,0,12">
-                        <Button Content="Open Image" Style="{StaticResource ActionButtonStyle}" Click="OpenImage_Click" />
-                        <Button Content="Load JSON" Style="{StaticResource ActionButtonStyle}" Click="LoadPreset_Click" />
-                        <Button Content="Save JSON" Style="{StaticResource ActionButtonStyle}" Click="SavePreset_Click" />
-                        <Button Content="Copy JSON" Style="{StaticResource ActionButtonStyle}" Click="CopyPreset_Click" />
-                        <Button Content="Export PNG" Style="{StaticResource ActionButtonStyle}" Click="ExportPreview_Click" />
-                        <Button Content="Reset Borders" Style="{StaticResource ActionButtonStyle}" Click="ResetBorders_Click" />
-                        <Button Content="Undo" Style="{StaticResource ActionButtonStyle}" Click="Undo_Click" />
-                        <Button Content="Redo" Style="{StaticResource ActionButtonStyle}" Click="Redo_Click" />
+                        <Button Style="{StaticResource ActionButtonStyle}" Click="OpenImage_Click" ToolTip="Open image">
+                            <StackPanel Orientation="Horizontal">
+                                <controls:SvgIcon Source="Assets/Icons/Tabler/photo-plus.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                <TextBlock Text="Open Image" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ActionButtonStyle}" Click="LoadPreset_Click" ToolTip="Load JSON">
+                            <StackPanel Orientation="Horizontal">
+                                <controls:SvgIcon Source="Assets/Icons/Tabler/file-import.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                <TextBlock Text="Load JSON" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ActionButtonStyle}" Click="SavePreset_Click" ToolTip="Save JSON">
+                            <StackPanel Orientation="Horizontal">
+                                <controls:SvgIcon Source="Assets/Icons/Tabler/device-floppy.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                <TextBlock Text="Save JSON" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ActionButtonStyle}" Click="CopyPreset_Click" ToolTip="Copy JSON">
+                            <StackPanel Orientation="Horizontal">
+                                <controls:SvgIcon Source="Assets/Icons/Tabler/copy.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                <TextBlock Text="Copy JSON" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ActionButtonStyle}" Click="ExportPreview_Click" ToolTip="Export PNG">
+                            <StackPanel Orientation="Horizontal">
+                                <controls:SvgIcon Source="Assets/Icons/Tabler/download.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                <TextBlock Text="Export PNG" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ActionButtonStyle}" Click="ResetBorders_Click" ToolTip="Reset borders">
+                            <StackPanel Orientation="Horizontal">
+                                <controls:SvgIcon Source="Assets/Icons/Tabler/refresh.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                <TextBlock Text="Reset Borders" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ActionButtonStyle}" Click="Undo_Click" ToolTip="Undo">
+                            <StackPanel Orientation="Horizontal">
+                                <controls:SvgIcon Source="Assets/Icons/Tabler/arrow-back-up.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                <TextBlock Text="Undo" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ActionButtonStyle}" Click="Redo_Click" ToolTip="Redo">
+                            <StackPanel Orientation="Horizontal">
+                                <controls:SvgIcon Source="Assets/Icons/Tabler/arrow-forward-up.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                <TextBlock Text="Redo" />
+                            </StackPanel>
+                        </Button>
                     </WrapPanel>
                 </StackPanel>
 
@@ -322,10 +364,30 @@
                                          Text="make this a button"
                                          KeyDown="ChatInputBox_KeyDown" />
                                 <WrapPanel>
-                                    <Button Content="Send Chat" Style="{StaticResource ActionButtonStyle}" Click="SendChat_Click" />
-                                    <Button Content="Preview Chat Proposal" Style="{StaticResource ActionButtonStyle}" Click="PreviewChatProposal_Click" />
-                                    <Button Content="Apply Chat Proposal" Style="{StaticResource ActionButtonStyle}" Click="ApplyChatProposal_Click" />
-                                    <Button Content="Reject Chat Proposal" Style="{StaticResource ActionButtonStyle}" Click="RejectChatProposal_Click" />
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="SendChat_Click" ToolTip="Send chat">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/message-chatbot.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Send Chat" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="PreviewChatProposal_Click" ToolTip="Preview chat proposal">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/search.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Preview Proposal" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="ApplyChatProposal_Click" ToolTip="Apply chat proposal">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/shield-check.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Apply Proposal" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="RejectChatProposal_Click" ToolTip="Reject chat proposal">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/x.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Reject Proposal" />
+                                        </StackPanel>
+                                    </Button>
                                 </WrapPanel>
                                 <TextBox x:Name="AssistantPromptBox"
                                          Margin="0,12,0,10"
@@ -344,7 +406,20 @@
                                           Style="{StaticResource ToggleStyle}" />
                                 <ComboBox x:Name="CloudAiProviderComboBox"
                                           Margin="0,0,0,10"
-                                          SelectionChanged="CloudAiProviderComboBox_SelectionChanged" />
+                                          SelectionChanged="CloudAiProviderComboBox_SelectionChanged">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <controls:SvgIcon Source="{Binding Id, Converter={StaticResource ProviderIconPathConverter}}"
+                                                                  IconBrush="{StaticResource TextBrush}"
+                                                                  Width="16"
+                                                                  Height="16"
+                                                                  Margin="0,0,8,0" />
+                                                <TextBlock Text="{Binding DisplayName}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
                                 <TextBox x:Name="CloudAiModelBox"
                                          Margin="0,0,0,10"
                                          Text="local" />
@@ -358,20 +433,60 @@
                                           Margin="0,0,0,10"
                                           DisplayMemberPath="Name" />
                                 <WrapPanel>
-                                    <Button Content="Suggest Borders" Style="{StaticResource ActionButtonStyle}" Click="SuggestBorders_Click" />
-                                    <Button Content="Analyze" Style="{StaticResource ActionButtonStyle}" Click="AnalyzeAssistant_Click" />
-                                    <Button Content="Apply Prompt" Style="{StaticResource ActionButtonStyle}" Click="ApplyAssistantPrompt_Click" />
-                                    <Button Content="Ask Cloud AI" Style="{StaticResource ActionButtonStyle}" Click="AskCloudAi_Click" />
-                                    <Button Content="Optimize Button" Style="{StaticResource ActionButtonStyle}" Click="OptimizeButton_Click" />
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="SuggestBorders_Click" ToolTip="Suggest borders from image">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/sparkles.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Suggest Borders" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="AnalyzeAssistant_Click" ToolTip="Analyze current slice">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/alert-triangle.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Analyze" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="ApplyAssistantPrompt_Click" ToolTip="Apply local prompt">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/wand.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Apply Prompt" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="AskCloudAi_Click" ToolTip="Ask cloud AI">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/brain.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Ask Cloud AI" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="OptimizeButton_Click" ToolTip="Optimize as button">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/settings.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Optimize Button" />
+                                        </StackPanel>
+                                    </Button>
                                     <Button Content="Apply Top Recommendation" Style="{StaticResource ActionButtonStyle}" Click="ApplyTopRecommendation_Click" />
                                     <Button Content="Find Best Fit" Style="{StaticResource ActionButtonStyle}" Click="FindBestFit_Click" />
                                     <Button Content="Optimize Across Sizes" Style="{StaticResource ActionButtonStyle}" Click="OptimizeAcrossSizes_Click" />
                                     <Button Content="Preview Candidate" Style="{StaticResource ActionButtonStyle}" Click="PreviewCandidate_Click" />
                                     <Button Content="Apply Candidate" Style="{StaticResource ActionButtonStyle}" Click="ApplyCandidate_Click" />
                                     <Button Content="Save Preset" Style="{StaticResource ActionButtonStyle}" Click="SaveUserPreset_Click" />
-                                    <Button Content="Batch Check" Style="{StaticResource ActionButtonStyle}" Click="BatchCheck_Click" />
-                                    <Button Content="Batch Export" Style="{StaticResource ActionButtonStyle}" Click="BatchExport_Click" />
-                                    <Button Content="Save AI Settings" Style="{StaticResource ActionButtonStyle}" Click="SaveCloudAiSettings_Click" />
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="BatchCheck_Click" ToolTip="Batch check">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/shield-check.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Batch Check" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="BatchExport_Click" ToolTip="Batch export">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/download.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Batch Export" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="SaveCloudAiSettings_Click" ToolTip="Save AI settings">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/device-floppy.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Save AI Settings" />
+                                        </StackPanel>
+                                    </Button>
                                 </WrapPanel>
                                 <TextBlock x:Name="AssistantResultText"
                                            Margin="0,8,0,0"

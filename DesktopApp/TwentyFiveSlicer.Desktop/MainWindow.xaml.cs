@@ -72,7 +72,6 @@ public partial class MainWindow : Window
         _verticalTextBoxes = [Vertical1TextBox, Vertical2TextBox, Vertical3TextBox, Vertical4TextBox];
         _horizontalTextBoxes = [Horizontal1TextBox, Horizontal2TextBox, Horizontal3TextBox, Horizontal4TextBox];
         CloudAiProviderComboBox.ItemsSource = _cloudAiProviders;
-        CloudAiProviderComboBox.DisplayMemberPath = nameof(CloudAiProviderDescriptor.DisplayName);
         CloudAiProviderComboBox.SelectedValuePath = nameof(CloudAiProviderDescriptor.Id);
         ChatMessagesListBox.ItemsSource = _chatMessages;
         PreviewControl.PreviewZoomChanged += PreviewControl_PreviewZoomChanged;
