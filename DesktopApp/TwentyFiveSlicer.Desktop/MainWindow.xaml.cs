@@ -296,13 +296,20 @@ public partial class MainWindow : Window
         if (CloudAiAdviceParser.TryParseSliceData(result.Advice, out TwentyFiveSliceData? parsedSliceData) &&
             parsedSliceData is TwentyFiveSliceData suggestedSliceData)
         {
-            SliceSuggestionReview review = SliceSuggestionReviewService.Review(
-                new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
-                suggestedSliceData,
-                _sourceImage?.PixelWidth ?? TargetWidthSlider.Value,
-                _sourceImage?.PixelHeight ?? TargetHeightSlider.Value,
-                TargetWidthSlider.Value,
-                TargetHeightSlider.Value);
+            SliceSuggestionReview review = _sourceImage is null
+                ? SliceSuggestionReviewService.Review(
+                    new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+                    suggestedSliceData,
+                    TargetWidthSlider.Value,
+                    TargetHeightSlider.Value,
+                    TargetWidthSlider.Value,
+                    TargetHeightSlider.Value)
+                : SliceSuggestionReviewService.Review(
+                    new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+                    suggestedSliceData,
+                    _sourceImage,
+                    TargetWidthSlider.Value,
+                    TargetHeightSlider.Value);
 
             if (review.SafeToApply)
             {

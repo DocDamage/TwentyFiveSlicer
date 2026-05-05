@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Windows.Media.Imaging;
 using TwentyFiveSlicer.Desktop.Models;
 
 namespace TwentyFiveSlicer.Desktop.Services;
@@ -104,6 +105,22 @@ public static class IdeAssistantBridge
                 proposedSliceData,
                 input.SourceWidth,
                 input.SourceHeight,
+                input.TargetWidth,
+                input.TargetHeight)
+        };
+
+        return JsonSerializer.Serialize(payload, JsonOptions);
+    }
+
+    public static string ReviewSuggestionJson(IdeAssistantInput input, TwentyFiveSliceData proposedSliceData, BitmapSource image)
+    {
+        var payload = new
+        {
+            schema = "twenty-five-slicer.ai.review.v1",
+            review = SliceSuggestionReviewService.Review(
+                input.SliceData,
+                proposedSliceData,
+                image,
                 input.TargetWidth,
                 input.TargetHeight)
         };

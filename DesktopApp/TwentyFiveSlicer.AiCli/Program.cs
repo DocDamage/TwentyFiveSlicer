@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Windows.Media.Imaging;
 using TwentyFiveSlicer.Desktop.Models;
 using TwentyFiveSlicer.Desktop.Services;
 
@@ -18,7 +19,7 @@ try
         "analyze" => IdeAssistantBridge.AnalyzeLocalJson(ReadInput(options)),
         "apply" => IdeAssistantBridge.ApplyPromptJson(ReadInput(options), GetOption(options, "prompt", "make practical improvements")),
         "prompt" => IdeAssistantBridge.BuildPromptJson(ReadInput(options), GetOption(options, "prompt", "analyze and recommend improvements")),
-        "review" => IdeAssistantBridge.ReviewSuggestionJson(ReadInput(options), ReadSliceData(GetRequiredOption(options, "proposed"))),
+        "review" => RunReview(options),
         "cloud" => await RunCloudAsync(options),
         _ => throw new InvalidOperationException($"Unknown command '{args[0]}'.")
     };
@@ -49,6 +50,15 @@ static async Task<string> RunCloudAsync(Dictionary<string, string> options)
         GetNullableOption(options, "endpoint"),
         GetNullableOption(options, "api-key-env"),
         image);
+}
+
+static string RunReview(Dictionary<string, string> options)
+{
+    IdeAssistantInput input = ReadInput(options);
+    TwentyFiveSliceData proposed = ReadSliceData(GetRequiredOption(options, "proposed"));
+    return options.TryGetValue("image", out string? imagePath)
+        ? IdeAssistantBridge.ReviewSuggestionJson(input, proposed, ReadBitmap(imagePath))
+        : IdeAssistantBridge.ReviewSuggestionJson(input, proposed);
 }
 
 static IdeAssistantInput ReadInput(Dictionary<string, string> options)
@@ -85,6 +95,17 @@ static CloudAiImageInput ReadImage(string imagePath)
     };
 
     return new CloudAiImageInput(mimeType, Convert.ToBase64String(bytes));
+}
+
+static BitmapSource ReadBitmap(string imagePath)
+{
+    var image = new BitmapImage();
+    image.BeginInit();
+    image.CacheOption = BitmapCacheOption.OnLoad;
+    image.UriSource = new Uri(Path.GetFullPath(imagePath));
+    image.EndInit();
+    image.Freeze();
+    return image;
 }
 
 static Dictionary<string, string> ParseOptions(string[] tokens)
@@ -166,7 +187,7 @@ static void PrintHelp()
       analyze --slice slice.json --source-width 100 --source-height 100 --target-width 640 --target-height 360
       apply --slice slice.json --prompt "make this a button"
       prompt --slice slice.json --prompt "recommend borders"
-      review --slice current.json --proposed proposed.json --source-width 100 --source-height 100 --target-width 640 --target-height 360
+      review --slice current.json --proposed proposed.json --source-width 100 --source-height 100 --target-width 640 --target-height 360 [--image source.png]
       cloud --slice slice.json --provider openai --prompt "recommend borders" [--model gpt-5.1] [--api-key-env OPENAI_API_KEY] [--endpoint URL] [--image image.png]
 
     Use --slice - to read Unity-compatible slice JSON from stdin.

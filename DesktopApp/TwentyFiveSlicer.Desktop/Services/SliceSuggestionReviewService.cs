@@ -1,4 +1,5 @@
 using TwentyFiveSlicer.Desktop.Models;
+using System.Windows.Media.Imaging;
 
 namespace TwentyFiveSlicer.Desktop.Services;
 
@@ -11,6 +12,36 @@ public static class SliceSuggestionReviewService
         double sourceHeight,
         double targetWidth,
         double targetHeight)
+    {
+        return Review(current, proposed, sourceWidth, sourceHeight, targetWidth, targetHeight, imageDerivedSliceData: null);
+    }
+
+    public static SliceSuggestionReview Review(
+        TwentyFiveSliceData current,
+        TwentyFiveSliceData proposed,
+        BitmapSource image,
+        double targetWidth,
+        double targetHeight)
+    {
+        SliceBorderSuggestion imageSuggestion = ImageBorderSuggestionService.SuggestBordersDetailed(image);
+        return Review(
+            current,
+            proposed,
+            image.PixelWidth,
+            image.PixelHeight,
+            targetWidth,
+            targetHeight,
+            imageSuggestion.SliceData);
+    }
+
+    private static SliceSuggestionReview Review(
+        TwentyFiveSliceData current,
+        TwentyFiveSliceData proposed,
+        double sourceWidth,
+        double sourceHeight,
+        double targetWidth,
+        double targetHeight,
+        TwentyFiveSliceData? imageDerivedSliceData)
     {
         TwentyFiveSliceData normalizedCurrent = new(current.VerticalBorders, current.HorizontalBorders);
         TwentyFiveSliceData normalizedProposed = new(proposed.VerticalBorders, proposed.HorizontalBorders);
@@ -60,11 +91,18 @@ public static class SliceSuggestionReviewService
             improvements.Add("Keeps opposite fixed bands balanced.");
         }
 
+        double imageFitPenalty = 0d;
+        if (imageDerivedSliceData is not null)
+        {
+            imageFitPenalty = GetImageFitPenalty(normalizedProposed, imageDerivedSliceData, sourceWidth, sourceHeight, improvements, risks);
+        }
+
         double score = 0.82d
             + ((currentWarnings - proposedWarnings) * 0.14d)
             - (proposedWarnings * 0.22d)
             - symmetryPenalty
-            - GetLargeMovePenalty(maxDelta, sourceWidth, sourceHeight);
+            - GetLargeMovePenalty(maxDelta, sourceWidth, sourceHeight)
+            - imageFitPenalty;
         score = Math.Clamp(score, 0d, 1d);
         bool safeToApply = proposedWarnings == 0 && score >= 0.78d && risks.Count == 0;
 
@@ -113,5 +151,35 @@ public static class SliceSuggestionReviewService
         double reference = Math.Max(1d, Math.Max(sourceWidth, sourceHeight));
         double ratio = maxDelta / reference;
         return ratio <= 0.15d ? 0d : Math.Min(0.18d, (ratio - 0.15d) * 0.6d);
+    }
+
+    private static double GetImageFitPenalty(
+        TwentyFiveSliceData proposed,
+        TwentyFiveSliceData imageDerived,
+        double sourceWidth,
+        double sourceHeight,
+        List<string> improvements,
+        List<string> risks)
+    {
+        double leftDelta = PercentToPixels(Math.Abs(proposed.VerticalBorders[0] - imageDerived.VerticalBorders[0]), sourceWidth);
+        double rightDelta = PercentToPixels(Math.Abs(proposed.VerticalBorders[3] - imageDerived.VerticalBorders[3]), sourceWidth);
+        double topDelta = PercentToPixels(Math.Abs(proposed.HorizontalBorders[0] - imageDerived.HorizontalBorders[0]), sourceHeight);
+        double bottomDelta = PercentToPixels(Math.Abs(proposed.HorizontalBorders[3] - imageDerived.HorizontalBorders[3]), sourceHeight);
+        double maxDelta = new[] { leftDelta, rightDelta, topDelta, bottomDelta }.Max();
+        double tolerance = Math.Max(2d, Math.Max(sourceWidth, sourceHeight) * 0.025d);
+
+        if (maxDelta <= tolerance)
+        {
+            improvements.Add("Outer guides align with detected opaque content bounds.");
+            return 0d;
+        }
+
+        risks.Add($"Outer guides differ from detected opaque content bounds by up to {maxDelta:0}px.");
+        return Math.Min(0.32d, (maxDelta - tolerance) / Math.Max(1d, Math.Max(sourceWidth, sourceHeight)) * 1.5d);
+    }
+
+    private static double PercentToPixels(double percent, double totalPixels)
+    {
+        return percent * Math.Max(1d, totalPixels) / 100d;
     }
 }

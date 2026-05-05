@@ -68,8 +68,11 @@ var tests = new (string Name, Action Test)[]
     ("IdeAssistantBridge returns prompt preview JSON", IdeAssistantBridgeReturnsPromptPreviewJson),
     ("IdeAssistantBridge returns structured error JSON", IdeAssistantBridgeReturnsStructuredErrorJson),
     ("IdeAssistantBridge returns suggestion review JSON", IdeAssistantBridgeReturnsSuggestionReviewJson),
+    ("IdeAssistantBridge returns image-aware suggestion review JSON", IdeAssistantBridgeReturnsImageAwareSuggestionReviewJson),
     ("SliceSuggestionReview blocks risky AI cuts", SliceSuggestionReviewBlocksRiskyAiCuts),
-    ("SliceSuggestionReview rewards warning reductions", SliceSuggestionReviewRewardsWarningReductions)
+    ("SliceSuggestionReview rewards warning reductions", SliceSuggestionReviewRewardsWarningReductions),
+    ("SliceSuggestionReview rewards image padding alignment", SliceSuggestionReviewRewardsImagePaddingAlignment),
+    ("SliceSuggestionReview blocks image padding mismatch", SliceSuggestionReviewBlocksImagePaddingMismatch)
 };
 
 int failures = 0;
@@ -1109,6 +1112,29 @@ static void IdeAssistantBridgeReturnsSuggestionReviewJson()
     Assert.Equal(4, root.GetProperty("review").GetProperty("verticalPixelDeltas").GetArrayLength(), "Review JSON should expose vertical pixel deltas.");
 }
 
+static void IdeAssistantBridgeReturnsImageAwareSuggestionReviewJson()
+{
+    RunOnStaThread(() =>
+    {
+        BitmapSource image = CreateTransparentPaddingBitmap(100, 100, 12, 12, 8, 8);
+        var input = new IdeAssistantInput(
+            TwentyFiveSliceData.CreateDefault(),
+            SourceWidth: 100d,
+            SourceHeight: 100d,
+            TargetWidth: 220d,
+            TargetHeight: 220d);
+        var proposed = new TwentyFiveSliceData([2d, 40d, 60d, 98d], [2d, 40d, 60d, 98d]);
+
+        string json = IdeAssistantBridge.ReviewSuggestionJson(input, proposed, image);
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement root = document.RootElement;
+
+        Assert.Equal("twenty-five-slicer.ai.review.v1", root.GetProperty("schema").GetString(), "Image-aware review output should keep the stable review schema.");
+        Assert.True(!root.GetProperty("review").GetProperty("safeToApply").GetBoolean(), "Image-aware review should block padding mismatches.");
+        Assert.True(root.GetProperty("review").GetProperty("risks").EnumerateArray().Any(risk => risk.GetString()!.Contains("opaque content bounds", StringComparison.OrdinalIgnoreCase)), "Image-aware review should expose content-bound risk.");
+    });
+}
+
 static void SliceSuggestionReviewBlocksRiskyAiCuts()
 {
     var current = TwentyFiveSliceData.CreateDefault();
@@ -1145,6 +1171,47 @@ static void SliceSuggestionReviewRewardsWarningReductions()
     Assert.True(review.Improvements.Any(improvement => improvement.Contains("reduced", StringComparison.OrdinalIgnoreCase)), "Review should explain warning reductions.");
     Assert.Equal(4, review.VerticalPixelDeltas.Count, "Review should expose per-guide vertical pixel deltas.");
     Assert.Equal(4, review.HorizontalPixelDeltas.Count, "Review should expose per-guide horizontal pixel deltas.");
+}
+
+static void SliceSuggestionReviewRewardsImagePaddingAlignment()
+{
+    RunOnStaThread(() =>
+    {
+        BitmapSource image = CreateTransparentPaddingBitmap(100, 100, 12, 12, 8, 8);
+        var current = TwentyFiveSliceData.CreateDefault();
+        var proposed = new TwentyFiveSliceData([12d, 40d, 60d, 88d], [8d, 40d, 60d, 92d]);
+
+        SliceSuggestionReview review = SliceSuggestionReviewService.Review(
+            current,
+            proposed,
+            image,
+            targetWidth: 220d,
+            targetHeight: 220d);
+
+        Assert.True(review.SafeToApply, "Suggestions aligned with detected transparent padding should be safe.");
+        Assert.True(review.Improvements.Any(improvement => improvement.Contains("opaque content bounds", StringComparison.OrdinalIgnoreCase)), "Review should explain image-bound alignment.");
+    });
+}
+
+static void SliceSuggestionReviewBlocksImagePaddingMismatch()
+{
+    RunOnStaThread(() =>
+    {
+        BitmapSource image = CreateTransparentPaddingBitmap(100, 100, 12, 12, 8, 8);
+        var current = TwentyFiveSliceData.CreateDefault();
+        var proposed = new TwentyFiveSliceData([2d, 40d, 60d, 98d], [2d, 40d, 60d, 98d]);
+
+        SliceSuggestionReview review = SliceSuggestionReviewService.Review(
+            current,
+            proposed,
+            image,
+            targetWidth: 220d,
+            targetHeight: 220d);
+
+        Assert.True(!review.SafeToApply, "Suggestions far from detected transparent padding should not auto-apply.");
+        Assert.True(review.Risks.Any(risk => risk.Contains("opaque content bounds", StringComparison.OrdinalIgnoreCase)), "Review should explain image-bound mismatch.");
+        Assert.True(review.Score < 0.78d, "Image-bound mismatch should lower the score below the safe threshold.");
+    });
 }
 
 static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int left, int right, int top, int bottom)
