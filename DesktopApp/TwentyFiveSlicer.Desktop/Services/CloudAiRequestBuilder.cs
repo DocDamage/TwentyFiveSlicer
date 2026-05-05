@@ -10,9 +10,14 @@ public static class CloudAiRequestBuilder
 {
     private const string SystemPrompt = "You are helping analyze 25-slice UI artwork. Return concise, practical slice-border advice.";
 
-    public static HttpRequestMessage BuildAnalysisRequest(CloudAiProviderDescriptor provider, CloudAiSettings settings, string prompt, CloudAiImageInput? image = null)
+    public static HttpRequestMessage BuildAnalysisRequest(
+        CloudAiProviderDescriptor provider,
+        CloudAiSettings settings,
+        string prompt,
+        CloudAiImageInput? image = null,
+        CloudAiSecretStore? secretStore = null)
     {
-        string apiKey = ResolveApiKey(provider, settings);
+        string apiKey = CloudAiApiKeyResolver.Resolve(provider, settings, secretStore);
         string model = string.IsNullOrWhiteSpace(settings.ModelId) ? provider.DefaultModel : settings.ModelId!;
         CloudAiImageInput? supportedImage = provider.SupportsVision ? image : null;
 
@@ -106,20 +111,6 @@ public static class CloudAiRequestBuilder
     {
         string endpoint = string.IsNullOrWhiteSpace(settings.EndpointOverride) ? provider.Endpoint : settings.EndpointOverride!;
         return endpoint.Replace("{model}", Uri.EscapeDataString(model), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string ResolveApiKey(CloudAiProviderDescriptor provider, CloudAiSettings settings)
-    {
-        string envVar = string.IsNullOrWhiteSpace(settings.ApiKeyEnvironmentVariable)
-            ? provider.ApiKeyEnvironmentVariable
-            : settings.ApiKeyEnvironmentVariable!;
-        string? apiKey = Environment.GetEnvironmentVariable(envVar);
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            throw new InvalidOperationException($"Environment variable {envVar} is not set.");
-        }
-
-        return apiKey;
     }
 
     private static StringContent JsonContent(object value)

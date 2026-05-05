@@ -160,10 +160,11 @@ public static class IdeAssistantBridge
             ProviderId = provider.Id,
             ModelId = string.IsNullOrWhiteSpace(modelId) ? provider.DefaultModel : modelId,
             EndpointOverride = endpointOverride,
-            ApiKeyEnvironmentVariable = apiKeyEnvironmentVariable
+            ApiKeyEnvironmentVariable = apiKeyEnvironmentVariable,
+            UseSecureApiKeyStore = true
         };
 
-        using var client = new CloudAiClient();
+        using var client = new CloudAiClient(CloudAiSecretStore.CreateDefault());
         CloudAiResult result = await client.AskAsync(provider, settings, fullPrompt, image, cancellationToken).ConfigureAwait(false);
         TwentyFiveSliceData? parsedSliceData = null;
         if (result.Success)

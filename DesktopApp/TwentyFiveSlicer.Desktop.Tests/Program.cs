@@ -59,6 +59,9 @@ var tests = new (string Name, Action Test)[]
     ("CloudAiClient parses Gemini responses", CloudAiClientParsesGeminiResponses),
     ("CloudAiClient reports HTTP failures", CloudAiClientReportsHttpFailures),
     ("CloudAiClient reports missing API key", CloudAiClientReportsMissingApiKey),
+    ("CloudAiSecretStore protects API keys at rest", CloudAiSecretStoreProtectsApiKeysAtRest),
+    ("CloudAiRequestBuilder resolves secure stored keys", CloudAiRequestBuilderResolvesSecureStoredKeys),
+    ("CloudAiClient uses secure stored keys", CloudAiClientUsesSecureStoredKeys),
     ("CloudAiAdviceParser extracts JSON border suggestions", CloudAiAdviceParserExtractsJsonBorderSuggestions),
     ("CloudAiAdviceParser extracts inline border suggestions", CloudAiAdviceParserExtractsInlineBorderSuggestions),
     ("CloudAiAdviceParser extracts fenced snake case JSON suggestions", CloudAiAdviceParserExtractsFencedSnakeCaseJsonSuggestions),
@@ -1343,6 +1346,100 @@ static void CloudAiClientReportsMissingApiKey()
     Assert.True(result.ErrorMessage.Contains("TFS_TEST_MISSING_KEY", StringComparison.OrdinalIgnoreCase), "Error should name missing env var.");
 }
 
+static void CloudAiSecretStoreProtectsApiKeysAtRest()
+{
+    string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}-secrets.json");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("openai")!;
+    var settings = new CloudAiSettings
+    {
+        ProviderId = "openai",
+        ApiKeyEnvironmentVariable = "TFS_TEST_SECURE_STORE_KEY"
+    };
+
+    try
+    {
+        var store = new CloudAiSecretStore(path, new TestSecretProtector());
+        store.SaveSecret(provider, settings, "super-secret-api-key");
+        string persisted = File.ReadAllText(path);
+
+        Assert.True(!persisted.Contains("super-secret-api-key", StringComparison.Ordinal), "Secret store should never persist raw API keys.");
+        Assert.True(store.HasSecret(provider, settings), "Saved secret should be discoverable by provider and env var.");
+        Assert.True(store.TryGetSecret(provider, settings, out string apiKey), "Saved secret should decrypt for the current user scope.");
+        Assert.Equal("super-secret-api-key", apiKey, "Decrypted API key should match the saved value.");
+    }
+    finally
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+}
+
+static void CloudAiRequestBuilderResolvesSecureStoredKeys()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_SECURE_ONLY_KEY", null);
+    string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}-secrets.json");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("openai")!;
+    var settings = new CloudAiSettings
+    {
+        ProviderId = "openai",
+        ModelId = "gpt-5.1",
+        ApiKeyEnvironmentVariable = "TFS_TEST_SECURE_ONLY_KEY",
+        UseSecureApiKeyStore = true
+    };
+
+    try
+    {
+        var store = new CloudAiSecretStore(path, new TestSecretProtector());
+        store.SaveSecret(provider, settings, "secure-store-test-key");
+
+        using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, "Analyze this slice.", secretStore: store);
+
+        Assert.Equal(new AuthenticationHeaderValue("Bearer", "secure-store-test-key"), request.Headers.Authorization!, "Request builder should use encrypted store key when env var is absent.");
+    }
+    finally
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+}
+
+static void CloudAiClientUsesSecureStoredKeys()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_CLIENT_SECURE_KEY", null);
+    string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}-secrets.json");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("openai")!;
+    var settings = new CloudAiSettings
+    {
+        Enabled = true,
+        ProviderId = "openai",
+        ApiKeyEnvironmentVariable = "TFS_TEST_CLIENT_SECURE_KEY",
+        UseSecureApiKeyStore = true
+    };
+
+    try
+    {
+        var store = new CloudAiSecretStore(path, new TestSecretProtector());
+        store.SaveSecret(provider, settings, "secure-client-test-key");
+        using var client = new CloudAiClient(new HttpClient(new FakeHttpHandler("""{"choices":[{"message":{"content":"Secure key worked."}}]}""")), store);
+
+        CloudAiResult result = client.AskAsync(provider, settings, "Analyze").GetAwaiter().GetResult();
+
+        Assert.True(result.Success, "Cloud client should send requests with secure stored keys.");
+        Assert.Equal("Secure key worked.", result.Advice, "Cloud client should parse response after using secure stored key.");
+    }
+    finally
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+}
+
 static void CloudAiAdviceParserExtractsJsonBorderSuggestions()
 {
     string advice = """
@@ -1901,6 +1998,31 @@ sealed class FakeHttpHandler : HttpMessageHandler
         {
             Content = new StringContent(_responseBody)
         });
+    }
+}
+
+sealed class TestSecretProtector : ICloudAiSecretProtector
+{
+    public byte[] Protect(byte[] plaintext, string entropy)
+    {
+        return Transform(plaintext, entropy);
+    }
+
+    public byte[] Unprotect(byte[] protectedData, string entropy)
+    {
+        return Transform(protectedData, entropy);
+    }
+
+    private static byte[] Transform(byte[] input, string entropy)
+    {
+        byte mask = (byte)(entropy.Sum(character => character) % 251);
+        byte[] output = new byte[input.Length];
+        for (int index = 0; index < input.Length; index++)
+        {
+            output[index] = (byte)(input[input.Length - index - 1] ^ mask);
+        }
+
+        return output;
     }
 }
 

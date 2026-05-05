@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Text;
+using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -38,8 +39,9 @@ public partial class MainWindow : Window
     private readonly SliceChatService _chat = new();
     private readonly List<string> _chatMessages = [];
     private readonly AppStateStore _appStateStore = new(AppStatePath);
+    private readonly CloudAiSecretStore _cloudAiSecretStore = CloudAiSecretStore.CreateDefault();
     private readonly IReadOnlyList<CloudAiProviderDescriptor> _cloudAiProviders = CloudAiProviderCatalog.GetAll();
-    private readonly CloudAiClient _cloudAiClient = new();
+    private readonly CloudAiClient _cloudAiClient;
     private readonly Dictionary<string, TwentyFiveSliceData> _presetLibrary = new()
     {
         ["Preset: Default"] = TwentyFiveSliceData.CreateDefault(),
@@ -64,6 +66,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        _cloudAiClient = new CloudAiClient(_cloudAiSecretStore);
         InitializeComponent();
         SliceSkinPanel.SetCandySkinEnabled(this, CandySkinCheckBox.IsChecked == true);
 
@@ -520,7 +523,47 @@ public partial class MainWindow : Window
         CloudAiProviderDescriptor? provider = GetSelectedCloudAiProvider();
         AssistantResultText.Text = provider is null
             ? "Cloud AI settings saved."
-            : $"Cloud AI settings saved for {CloudAiProviderLabelFormatter.Format(provider.DisplayName)}. API keys are read from environment variables, not app state.";
+            : $"Cloud AI settings saved for {CloudAiProviderLabelFormatter.Format(provider.DisplayName)}. Keys use environment variables or the encrypted Windows user vault.";
+        UpdateCloudAiKeyStatus();
+    }
+
+    private void SaveCloudAiApiKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (GetSelectedCloudAiProvider() is not CloudAiProviderDescriptor provider)
+        {
+            AssistantResultText.Text = "Choose a cloud AI provider before saving a key.";
+            return;
+        }
+
+        try
+        {
+            CloudAiSettings settings = CreateCloudAiSettings();
+            _cloudAiSecretStore.SaveSecret(provider, settings, CloudAiApiKeyBox.Password);
+            CloudAiApiKeyBox.Clear();
+            SaveAppState();
+            AssistantResultText.Text = $"Secure key saved for {CloudAiProviderLabelFormatter.Format(provider.DisplayName)}.";
+            UpdateCloudAiKeyStatus();
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException or CryptographicException)
+        {
+            AssistantResultText.Text = $"Secure key was not saved: {exception.Message}";
+        }
+    }
+
+    private void DeleteCloudAiApiKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (GetSelectedCloudAiProvider() is not CloudAiProviderDescriptor provider)
+        {
+            AssistantResultText.Text = "Choose a cloud AI provider before deleting a key.";
+            return;
+        }
+
+        bool removed = _cloudAiSecretStore.DeleteSecret(provider, CreateCloudAiSettings());
+        CloudAiApiKeyBox.Clear();
+        AssistantResultText.Text = removed
+            ? $"Secure key deleted for {CloudAiProviderLabelFormatter.Format(provider.DisplayName)}."
+            : $"No secure key was saved for {CloudAiProviderLabelFormatter.Format(provider.DisplayName)}.";
+        UpdateCloudAiKeyStatus();
     }
 
     private void CloudAiProviderComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -533,6 +576,8 @@ public partial class MainWindow : Window
         CloudAiModelBox.Text = provider.DefaultModel;
         CloudAiApiKeyEnvBox.Text = provider.ApiKeyEnvironmentVariable;
         CloudAiEndpointBox.Text = provider.Endpoint;
+        CloudAiApiKeyBox.Clear();
+        UpdateCloudAiKeyStatus();
     }
 
     private void BatchCheck_Click(object sender, RoutedEventArgs e)
@@ -1287,7 +1332,8 @@ public partial class MainWindow : Window
             EndpointOverride = string.IsNullOrWhiteSpace(CloudAiEndpointBox.Text) || string.Equals(CloudAiEndpointBox.Text.Trim(), provider?.Endpoint, StringComparison.OrdinalIgnoreCase)
                 ? null
                 : CloudAiEndpointBox.Text.Trim(),
-            ApiKeyEnvironmentVariable = string.IsNullOrWhiteSpace(CloudAiApiKeyEnvBox.Text) ? provider?.ApiKeyEnvironmentVariable : CloudAiApiKeyEnvBox.Text.Trim()
+            ApiKeyEnvironmentVariable = string.IsNullOrWhiteSpace(CloudAiApiKeyEnvBox.Text) ? provider?.ApiKeyEnvironmentVariable : CloudAiApiKeyEnvBox.Text.Trim(),
+            UseSecureApiKeyStore = true
         };
     }
 
@@ -1306,17 +1352,33 @@ public partial class MainWindow : Window
             CloudAiEndpointBox.Text = string.IsNullOrWhiteSpace(settings.EndpointOverride)
                 ? provider?.Endpoint ?? string.Empty
                 : settings.EndpointOverride;
+            CloudAiApiKeyBox.Clear();
         }
         finally
         {
             _isUpdatingUi = false;
         }
+
+        UpdateCloudAiKeyStatus();
     }
 
     private CloudAiProviderDescriptor? GetSelectedCloudAiProvider()
     {
         return CloudAiProviderComboBox.SelectedItem as CloudAiProviderDescriptor ??
             (CloudAiProviderComboBox.SelectedValue is string id ? CloudAiProviderCatalog.Find(id) : null);
+    }
+
+    private void UpdateCloudAiKeyStatus()
+    {
+        if (CloudAiKeyStatusText is null)
+        {
+            return;
+        }
+
+        CloudAiProviderDescriptor? provider = GetSelectedCloudAiProvider();
+        CloudAiKeyStatusText.Text = provider is null
+            ? "Choose a provider to check key status."
+            : _cloudAiSecretStore.DescribeStatus(provider, CreateCloudAiSettings());
     }
 
     private string BuildCloudAiPrompt()

@@ -11,4 +11,6 @@ public sealed class CloudAiSettings
     public string? EndpointOverride { get; set; }
 
     public string? ApiKeyEnvironmentVariable { get; set; }
+
+    public bool UseSecureApiKeyStore { get; set; } = true;
 }

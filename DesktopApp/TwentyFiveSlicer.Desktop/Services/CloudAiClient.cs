@@ -8,21 +8,28 @@ public sealed class CloudAiClient : IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
+    private readonly CloudAiSecretStore? _secretStore;
 
     public CloudAiClient()
-        : this(new HttpClient { Timeout = TimeSpan.FromSeconds(45) }, ownsHttpClient: true)
+        : this(new HttpClient { Timeout = TimeSpan.FromSeconds(45) }, ownsHttpClient: true, secretStore: null)
     {
     }
 
-    public CloudAiClient(HttpClient httpClient)
-        : this(httpClient, ownsHttpClient: false)
+    public CloudAiClient(CloudAiSecretStore secretStore)
+        : this(new HttpClient { Timeout = TimeSpan.FromSeconds(45) }, ownsHttpClient: true, secretStore)
     {
     }
 
-    private CloudAiClient(HttpClient httpClient, bool ownsHttpClient)
+    public CloudAiClient(HttpClient httpClient, CloudAiSecretStore? secretStore = null)
+        : this(httpClient, ownsHttpClient: false, secretStore)
+    {
+    }
+
+    private CloudAiClient(HttpClient httpClient, bool ownsHttpClient, CloudAiSecretStore? secretStore)
     {
         _httpClient = httpClient;
         _ownsHttpClient = ownsHttpClient;
+        _secretStore = secretStore;
     }
 
     public async Task<CloudAiResult> AskAsync(
@@ -34,7 +41,7 @@ public sealed class CloudAiClient : IDisposable
     {
         try
         {
-            using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, prompt, image);
+            using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, prompt, image, _secretStore);
             using HttpResponseMessage response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 

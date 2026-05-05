@@ -451,6 +451,14 @@
                                 <TextBox x:Name="CloudAiApiKeyEnvBox"
                                          Margin="0,0,0,10"
                                          Text="OPENAI_API_KEY" />
+                                <PasswordBox x:Name="CloudAiApiKeyBox"
+                                             Margin="0,0,0,10"
+                                             ToolTip="Paste an API key to save it in the encrypted Windows user vault" />
+                                <TextBlock x:Name="CloudAiKeyStatusText"
+                                           Margin="0,0,0,10"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="No cloud key checked yet." />
                                 <TextBox x:Name="CloudAiEndpointBox"
                                          Margin="0,0,0,10"
                                          Text="" />
@@ -510,6 +518,18 @@
                                         <StackPanel Orientation="Horizontal">
                                             <controls:SvgIcon Source="Assets/Icons/Tabler/device-floppy.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
                                             <TextBlock Text="Save AI Settings" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="SaveCloudAiApiKey_Click" ToolTip="Save API key securely">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/shield-check.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Save Secure Key" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Click="DeleteCloudAiApiKey_Click" ToolTip="Delete saved API key">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:SvgIcon Source="Assets/Icons/Tabler/x.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                            <TextBlock Text="Delete Secure Key" />
                                         </StackPanel>
                                     </Button>
                                 </WrapPanel>

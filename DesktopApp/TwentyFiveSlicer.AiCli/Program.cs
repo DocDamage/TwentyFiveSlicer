@@ -21,6 +21,9 @@ try
         "prompt" => IdeAssistantBridge.BuildPromptJson(ReadInput(options), GetOption(options, "prompt", "analyze and recommend improvements")),
         "review" => RunReview(options),
         "cloud" => await RunCloudAsync(options),
+        "key-status" => RunKeyStatus(options),
+        "key-set" => RunKeySet(options),
+        "key-delete" => RunKeyDelete(options),
         _ => throw new InvalidOperationException($"Unknown command '{args[0]}'.")
     };
 
@@ -59,6 +62,69 @@ static string RunReview(Dictionary<string, string> options)
     return options.TryGetValue("image", out string? imagePath)
         ? IdeAssistantBridge.ReviewSuggestionJson(input, proposed, ReadBitmap(imagePath))
         : IdeAssistantBridge.ReviewSuggestionJson(input, proposed);
+}
+
+static string RunKeyStatus(Dictionary<string, string> options)
+{
+    CloudAiProviderDescriptor provider = ReadProvider(options);
+    CloudAiSettings settings = ReadCloudKeySettings(provider, options);
+    var store = CloudAiSecretStore.CreateDefault();
+    return JsonSerializer.Serialize(new
+    {
+        schema = "twenty-five-slicer.ai.key-status.v1",
+        provider = provider.Id,
+        apiKeyEnvironmentVariable = CloudAiSecretStore.ResolveEnvironmentVariable(provider, settings),
+        environmentVariableSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(CloudAiSecretStore.ResolveEnvironmentVariable(provider, settings))),
+        secureKeyStored = store.HasSecret(provider, settings),
+        status = store.DescribeStatus(provider, settings)
+    });
+}
+
+static string RunKeySet(Dictionary<string, string> options)
+{
+    CloudAiProviderDescriptor provider = ReadProvider(options);
+    CloudAiSettings settings = ReadCloudKeySettings(provider, options);
+    string apiKey = Console.In.ReadToEnd().Trim();
+    CloudAiSecretStore.CreateDefault().SaveSecret(provider, settings, apiKey);
+    return JsonSerializer.Serialize(new
+    {
+        schema = "twenty-five-slicer.ai.key-set.v1",
+        provider = provider.Id,
+        apiKeyEnvironmentVariable = CloudAiSecretStore.ResolveEnvironmentVariable(provider, settings),
+        saved = true
+    });
+}
+
+static string RunKeyDelete(Dictionary<string, string> options)
+{
+    CloudAiProviderDescriptor provider = ReadProvider(options);
+    CloudAiSettings settings = ReadCloudKeySettings(provider, options);
+    bool deleted = CloudAiSecretStore.CreateDefault().DeleteSecret(provider, settings);
+    return JsonSerializer.Serialize(new
+    {
+        schema = "twenty-five-slicer.ai.key-delete.v1",
+        provider = provider.Id,
+        apiKeyEnvironmentVariable = CloudAiSecretStore.ResolveEnvironmentVariable(provider, settings),
+        deleted
+    });
+}
+
+static CloudAiProviderDescriptor ReadProvider(Dictionary<string, string> options)
+{
+    string providerId = GetRequiredOption(options, "provider");
+    return CloudAiProviderCatalog.Find(providerId)
+        ?? throw new InvalidOperationException($"Unknown cloud AI provider '{providerId}'. Run providers to list supported IDs and aliases.");
+}
+
+static CloudAiSettings ReadCloudKeySettings(CloudAiProviderDescriptor provider, Dictionary<string, string> options)
+{
+    return new CloudAiSettings
+    {
+        Enabled = true,
+        ProviderId = provider.Id,
+        ApiKeyEnvironmentVariable = GetNullableOption(options, "api-key-env"),
+        UseSecureApiKeyStore = true
+    };
 }
 
 static IdeAssistantInput ReadInput(Dictionary<string, string> options)
@@ -189,8 +255,12 @@ static void PrintHelp()
       prompt --slice slice.json --prompt "recommend borders"
       review --slice current.json --proposed proposed.json --source-width 100 --source-height 100 --target-width 640 --target-height 360 [--image source.png]
       cloud --slice slice.json --provider openai --prompt "recommend borders" [--model gpt-5.1] [--api-key-env OPENAI_API_KEY] [--endpoint URL] [--image image.png]
+      key-status --provider openai [--api-key-env OPENAI_API_KEY]
+      key-set --provider openai [--api-key-env OPENAI_API_KEY] < api-key.txt
+      key-delete --provider openai [--api-key-env OPENAI_API_KEY]
 
     Use --slice - to read Unity-compatible slice JSON from stdin.
     Output is JSON so IDE agents such as Codex can parse it directly, including errors.
+    key-set reads the API key from stdin so the secret does not appear in command history.
     """);
 }
