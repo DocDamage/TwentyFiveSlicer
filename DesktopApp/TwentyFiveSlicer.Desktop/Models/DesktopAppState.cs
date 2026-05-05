@@ -7,4 +7,6 @@ public sealed class DesktopAppState
     public Dictionary<string, TwentyFiveSliceData> UserPresets { get; set; } = [];
 
     public DesktopSessionState? LastSession { get; set; }
+
+    public CloudAiSettings CloudAi { get; set; } = new();
 }

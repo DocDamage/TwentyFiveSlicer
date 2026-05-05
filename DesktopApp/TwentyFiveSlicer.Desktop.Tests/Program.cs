@@ -1,4 +1,6 @@
 using System.IO;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -25,7 +27,12 @@ var tests = new (string Name, Action Test)[]
     ("SliceAssistant aggregate candidates include target coverage", SliceAssistantAggregateCandidatesIncludeTargetCoverage),
     ("AssistantReportFormatter formats candidate summaries", AssistantReportFormatterFormatsCandidateSummaries),
     ("PreviewTargetCatalog exposes common targets", PreviewTargetCatalogExposesCommonTargets),
-    ("AppStateStore round trips last session", AppStateStoreRoundTripsLastSession)
+    ("AppStateStore round trips last session", AppStateStoreRoundTripsLastSession),
+    ("CloudAiProviderCatalog includes common providers", CloudAiProviderCatalogIncludesCommonProviders),
+    ("CloudAiRequestBuilder builds OpenAI compatible requests", CloudAiRequestBuilderBuildsOpenAiCompatibleRequests),
+    ("CloudAiRequestBuilder builds Anthropic requests", CloudAiRequestBuilderBuildsAnthropicRequests),
+    ("CloudAiRequestBuilder builds Gemini requests", CloudAiRequestBuilderBuildsGeminiRequests),
+    ("AppStateStore round trips cloud AI settings", AppStateStoreRoundTripsCloudAiSettings)
 };
 
 int failures = 0;
@@ -354,6 +361,120 @@ static void AppStateStoreRoundTripsLastSession()
         Assert.Equal(true, session.KeepAspect, "Toggle state should round trip.");
         Assert.Equal(88d, session.SliceData.VerticalBorders[3], "Slice data should round trip.");
         Assert.Equal("Best fit: Button", session.AssistantOutput, "Assistant output should round trip.");
+    }
+    finally
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+}
+
+static void CloudAiProviderCatalogIncludesCommonProviders()
+{
+    IReadOnlyList<CloudAiProviderDescriptor> providers = CloudAiProviderCatalog.GetAll();
+
+    Assert.Contains(providers, provider => provider.Id == "openai");
+    Assert.Contains(providers, provider => provider.Id == "anthropic");
+    Assert.Contains(providers, provider => provider.Id == "gemini");
+    Assert.Contains(providers, provider => provider.Id == "kimi");
+    Assert.Contains(providers, provider => provider.Id == "deepseek");
+    Assert.Contains(providers, provider => provider.Aliases.Contains("deepseel"));
+    Assert.Contains(providers, provider => provider.Id == "glm");
+    Assert.Contains(providers, provider => provider.Id == "minimax");
+    Assert.Contains(providers, provider => provider.Id == "mistral");
+    Assert.Contains(providers, provider => provider.Id == "cohere");
+    Assert.Contains(providers, provider => provider.Id == "groq");
+    Assert.Contains(providers, provider => provider.Id == "xai");
+    Assert.Contains(providers, provider => provider.Id == "perplexity");
+    Assert.Contains(providers, provider => provider.Id == "openai-compatible");
+}
+
+static void CloudAiRequestBuilderBuildsOpenAiCompatibleRequests()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_OPENAI_KEY", "openai-test-key");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("openai")!;
+    var settings = new CloudAiSettings
+    {
+        ProviderId = "openai",
+        ModelId = "gpt-5.1",
+        ApiKeyEnvironmentVariable = "TFS_TEST_OPENAI_KEY"
+    };
+
+    using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, "Analyze this slice.");
+    string body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+
+    Assert.Equal("https://api.openai.com/v1/chat/completions", request.RequestUri!.ToString(), "OpenAI request should use chat completions endpoint.");
+    Assert.Equal(new AuthenticationHeaderValue("Bearer", "openai-test-key"), request.Headers.Authorization!, "OpenAI request should use bearer auth.");
+    Assert.True(body.Contains("\"model\":\"gpt-5.1\""), "OpenAI body should include selected model.");
+    Assert.True(body.Contains("Analyze this slice."), "OpenAI body should include prompt.");
+}
+
+static void CloudAiRequestBuilderBuildsAnthropicRequests()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_ANTHROPIC_KEY", "anthropic-test-key");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("claude")!;
+    var settings = new CloudAiSettings
+    {
+        ProviderId = "anthropic",
+        ModelId = "claude-sonnet-4-5",
+        ApiKeyEnvironmentVariable = "TFS_TEST_ANTHROPIC_KEY"
+    };
+
+    using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, "Analyze this slice.");
+    string body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+
+    Assert.Equal("https://api.anthropic.com/v1/messages", request.RequestUri!.ToString(), "Anthropic request should use Messages endpoint.");
+    Assert.True(request.Headers.TryGetValues("x-api-key", out IEnumerable<string>? keys) && keys.Single() == "anthropic-test-key", "Anthropic request should use x-api-key.");
+    Assert.True(request.Headers.Contains("anthropic-version"), "Anthropic request should include API version header.");
+    Assert.True(body.Contains("\"max_tokens\""), "Anthropic body should include max_tokens.");
+}
+
+static void CloudAiRequestBuilderBuildsGeminiRequests()
+{
+    Environment.SetEnvironmentVariable("TFS_TEST_GEMINI_KEY", "gemini-test-key");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("gemini")!;
+    var settings = new CloudAiSettings
+    {
+        ProviderId = "gemini",
+        ModelId = "gemini-3-pro",
+        ApiKeyEnvironmentVariable = "TFS_TEST_GEMINI_KEY"
+    };
+
+    using HttpRequestMessage request = CloudAiRequestBuilder.BuildAnalysisRequest(provider, settings, "Analyze this slice.");
+    string body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+
+    Assert.True(request.RequestUri!.ToString().Contains("models/gemini-3-pro:generateContent"), "Gemini request should target model generateContent.");
+    Assert.True(request.RequestUri!.ToString().Contains("key=gemini-test-key"), "Gemini request should include API key query parameter.");
+    Assert.True(body.Contains("Analyze this slice."), "Gemini body should include prompt.");
+}
+
+static void AppStateStoreRoundTripsCloudAiSettings()
+{
+    string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.json");
+    var store = new AppStateStore(path);
+    var state = new DesktopAppState
+    {
+        CloudAi = new CloudAiSettings
+        {
+            Enabled = true,
+            ProviderId = "kimi",
+            ModelId = "kimi-k2.5",
+            EndpointOverride = "https://example.test/v1/chat/completions",
+            ApiKeyEnvironmentVariable = "MOONSHOT_API_KEY"
+        }
+    };
+
+    try
+    {
+        store.Save(state);
+        DesktopAppState loaded = store.Load();
+
+        Assert.True(loaded.CloudAi.Enabled, "Cloud AI enabled flag should round trip.");
+        Assert.Equal("kimi", loaded.CloudAi.ProviderId, "Provider should round trip.");
+        Assert.Equal("kimi-k2.5", loaded.CloudAi.ModelId, "Model should round trip.");
+        Assert.Equal("MOONSHOT_API_KEY", loaded.CloudAi.ApiKeyEnvironmentVariable, "API key environment variable should round trip.");
     }
     finally
     {

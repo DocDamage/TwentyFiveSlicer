@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private readonly RecentFileList _recentFiles = new();
     private readonly SliceAssistantService _assistant = new();
     private readonly AppStateStore _appStateStore = new(AppStatePath);
+    private readonly IReadOnlyList<CloudAiProviderDescriptor> _cloudAiProviders = CloudAiProviderCatalog.GetAll();
     private readonly Dictionary<string, TwentyFiveSliceData> _presetLibrary = new()
     {
         ["Preset: Default"] = TwentyFiveSliceData.CreateDefault(),
@@ -50,6 +51,7 @@ public partial class MainWindow : Window
     private bool _isUpdatingUi;
     private bool _isSyncingTargetSize;
     private bool _isRestoringSession;
+    private bool _isWindowReady;
 
     public MainWindow()
     {
@@ -61,11 +63,15 @@ public partial class MainWindow : Window
         _horizontalValueTexts = [Horizontal1ValueText, Horizontal2ValueText, Horizontal3ValueText, Horizontal4ValueText];
         _verticalTextBoxes = [Vertical1TextBox, Vertical2TextBox, Vertical3TextBox, Vertical4TextBox];
         _horizontalTextBoxes = [Horizontal1TextBox, Horizontal2TextBox, Horizontal3TextBox, Horizontal4TextBox];
+        CloudAiProviderComboBox.ItemsSource = _cloudAiProviders;
+        CloudAiProviderComboBox.DisplayMemberPath = nameof(CloudAiProviderDescriptor.DisplayName);
+        CloudAiProviderComboBox.SelectedValuePath = nameof(CloudAiProviderDescriptor.Id);
         LoadAppState();
         UpdatePresetLibraryUi();
 
         ApplyBorderStateToUi();
         _history = new SliceHistory(CreateEditorState());
+        _isWindowReady = true;
         UpdatePreview();
     }
 
@@ -357,6 +363,27 @@ public partial class MainWindow : Window
         AssistantResultText.Text = $"Saved {key}.";
     }
 
+    private void SaveCloudAiSettings_Click(object sender, RoutedEventArgs e)
+    {
+        SaveAppState();
+        CloudAiProviderDescriptor? provider = GetSelectedCloudAiProvider();
+        AssistantResultText.Text = provider is null
+            ? "Cloud AI settings saved."
+            : $"Cloud AI settings saved for {provider.DisplayName}. API keys are read from environment variables, not app state.";
+    }
+
+    private void CloudAiProviderComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi || GetSelectedCloudAiProvider() is not CloudAiProviderDescriptor provider)
+        {
+            return;
+        }
+
+        CloudAiModelBox.Text = provider.DefaultModel;
+        CloudAiApiKeyEnvBox.Text = provider.ApiKeyEnvironmentVariable;
+        CloudAiEndpointBox.Text = provider.Endpoint;
+    }
+
     private void BatchCheck_Click(object sender, RoutedEventArgs e)
     {
         UpdateBatchResults();
@@ -441,7 +468,7 @@ public partial class MainWindow : Window
 
     private void BorderSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (_isUpdatingUi || sender is not Slider slider || slider.Tag is not string tag || tag.Length != 2)
+        if (!_isWindowReady || _isUpdatingUi || sender is not Slider slider || slider.Tag is not string tag || tag.Length != 2)
         {
             return;
         }
@@ -457,7 +484,7 @@ public partial class MainWindow : Window
 
     private void PreviewSettingChanged(object sender, RoutedEventArgs e)
     {
-        if (_isUpdatingUi)
+        if (!_isWindowReady || _isUpdatingUi)
         {
             return;
         }
@@ -865,6 +892,7 @@ public partial class MainWindow : Window
         }
 
         UpdateRecentFilesUi();
+        ApplyCloudAiSettings(state.CloudAi);
         if (state.LastSession is not null)
         {
             ApplySessionState(state.LastSession);
@@ -876,7 +904,8 @@ public partial class MainWindow : Window
         var state = new DesktopAppState
         {
             RecentFiles = _recentFiles.Files.ToList(),
-            LastSession = CreateSessionState()
+            LastSession = CreateSessionState(),
+            CloudAi = CreateCloudAiSettings()
         };
 
         foreach ((string name, TwentyFiveSliceData data) in _presetLibrary.Where(pair => pair.Key.StartsWith("User:", StringComparison.OrdinalIgnoreCase)))
@@ -885,6 +914,49 @@ public partial class MainWindow : Window
         }
 
         _appStateStore.Save(state);
+    }
+
+    private CloudAiSettings CreateCloudAiSettings()
+    {
+        CloudAiProviderDescriptor? provider = GetSelectedCloudAiProvider();
+        return new CloudAiSettings
+        {
+            Enabled = CloudAiEnabledCheckBox.IsChecked == true,
+            ProviderId = provider?.Id ?? "local",
+            ModelId = string.IsNullOrWhiteSpace(CloudAiModelBox.Text) ? provider?.DefaultModel : CloudAiModelBox.Text.Trim(),
+            EndpointOverride = string.IsNullOrWhiteSpace(CloudAiEndpointBox.Text) || string.Equals(CloudAiEndpointBox.Text.Trim(), provider?.Endpoint, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : CloudAiEndpointBox.Text.Trim(),
+            ApiKeyEnvironmentVariable = string.IsNullOrWhiteSpace(CloudAiApiKeyEnvBox.Text) ? provider?.ApiKeyEnvironmentVariable : CloudAiApiKeyEnvBox.Text.Trim()
+        };
+    }
+
+    private void ApplyCloudAiSettings(CloudAiSettings settings)
+    {
+        _isUpdatingUi = true;
+        try
+        {
+            CloudAiProviderDescriptor? provider = CloudAiProviderCatalog.Find(settings.ProviderId) ?? _cloudAiProviders.FirstOrDefault();
+            CloudAiEnabledCheckBox.IsChecked = settings.Enabled;
+            CloudAiProviderComboBox.SelectedValue = provider?.Id;
+            CloudAiModelBox.Text = string.IsNullOrWhiteSpace(settings.ModelId) ? provider?.DefaultModel ?? string.Empty : settings.ModelId;
+            CloudAiApiKeyEnvBox.Text = string.IsNullOrWhiteSpace(settings.ApiKeyEnvironmentVariable)
+                ? provider?.ApiKeyEnvironmentVariable ?? string.Empty
+                : settings.ApiKeyEnvironmentVariable;
+            CloudAiEndpointBox.Text = string.IsNullOrWhiteSpace(settings.EndpointOverride)
+                ? provider?.Endpoint ?? string.Empty
+                : settings.EndpointOverride;
+        }
+        finally
+        {
+            _isUpdatingUi = false;
+        }
+    }
+
+    private CloudAiProviderDescriptor? GetSelectedCloudAiProvider()
+    {
+        return CloudAiProviderComboBox.SelectedItem as CloudAiProviderDescriptor ??
+            (CloudAiProviderComboBox.SelectedValue is string id ? CloudAiProviderCatalog.Find(id) : null);
     }
 
     private DesktopSessionState CreateSessionState()

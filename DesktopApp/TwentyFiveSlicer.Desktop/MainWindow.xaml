@@ -282,6 +282,21 @@
                                 <TextBox x:Name="PresetNameBox"
                                          Margin="0,0,0,10"
                                          Text="My Preset" />
+                                <CheckBox x:Name="CloudAiEnabledCheckBox"
+                                          Content="Cloud AI"
+                                          Style="{StaticResource ToggleStyle}" />
+                                <ComboBox x:Name="CloudAiProviderComboBox"
+                                          Margin="0,0,0,10"
+                                          SelectionChanged="CloudAiProviderComboBox_SelectionChanged" />
+                                <TextBox x:Name="CloudAiModelBox"
+                                         Margin="0,0,0,10"
+                                         Text="local" />
+                                <TextBox x:Name="CloudAiApiKeyEnvBox"
+                                         Margin="0,0,0,10"
+                                         Text="OPENAI_API_KEY" />
+                                <TextBox x:Name="CloudAiEndpointBox"
+                                         Margin="0,0,0,10"
+                                         Text="" />
                                 <WrapPanel>
                                     <Button Content="Suggest Borders" Style="{StaticResource ActionButtonStyle}" Click="SuggestBorders_Click" />
                                     <Button Content="Analyze" Style="{StaticResource ActionButtonStyle}" Click="AnalyzeAssistant_Click" />
@@ -293,6 +308,7 @@
                                     <Button Content="Save Preset" Style="{StaticResource ActionButtonStyle}" Click="SaveUserPreset_Click" />
                                     <Button Content="Batch Check" Style="{StaticResource ActionButtonStyle}" Click="BatchCheck_Click" />
                                     <Button Content="Batch Export" Style="{StaticResource ActionButtonStyle}" Click="BatchExport_Click" />
+                                    <Button Content="Save AI Settings" Style="{StaticResource ActionButtonStyle}" Click="SaveCloudAiSettings_Click" />
                                 </WrapPanel>
                                 <TextBlock x:Name="AssistantResultText"
                                            Margin="0,8,0,0"
