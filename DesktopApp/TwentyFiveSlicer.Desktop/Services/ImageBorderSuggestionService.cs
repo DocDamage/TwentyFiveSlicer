@@ -8,11 +8,16 @@ public static class ImageBorderSuggestionService
 {
     public static TwentyFiveSliceData SuggestBorders(BitmapSource image)
     {
+        return SuggestBordersDetailed(image).SliceData;
+    }
+
+    public static SliceBorderSuggestion SuggestBordersDetailed(BitmapSource image)
+    {
         int width = image.PixelWidth;
         int height = image.PixelHeight;
         if (width <= 0 || height <= 0)
         {
-            return TwentyFiveSliceData.CreateDefault();
+            return new SliceBorderSuggestion(TwentyFiveSliceData.CreateDefault(), 0.1d, ["Image has no measurable dimensions."]);
         }
 
         BitmapSource source = image.Format == PixelFormats.Bgra32
@@ -30,12 +35,28 @@ public static class ImageBorderSuggestionService
 
         if (left < 0 || top < 0)
         {
-            return TwentyFiveSliceData.CreateDefault();
+            return new SliceBorderSuggestion(TwentyFiveSliceData.CreateDefault(), 0.2d, ["No opaque pixels were found, so default borders were used."]);
         }
 
-        return new TwentyFiveSliceData(
+        var sliceData = new TwentyFiveSliceData(
             BuildSuggestedAxis(left, right, width),
             BuildSuggestedAxis(top, bottom, height));
+        double horizontalPadding = (left + right) / (double)Math.Max(1, width);
+        double verticalPadding = (top + bottom) / (double)Math.Max(1, height);
+        double confidence = Math.Clamp(0.55d + ((horizontalPadding + verticalPadding) * 0.9d), 0.55d, 0.95d);
+
+        var reasons = new List<string>
+        {
+            $"Detected transparent padding: left {left}px, right {right}px, top {top}px, bottom {bottom}px."
+        };
+
+        if (left == right && top == bottom)
+        {
+            reasons.Add("Padding is symmetrical, which raises confidence.");
+            confidence = Math.Min(0.98d, confidence + 0.08d);
+        }
+
+        return new SliceBorderSuggestion(sliceData, confidence, reasons);
     }
 
     private static double[] BuildSuggestedAxis(int leadingPadding, int trailingPadding, int totalSize)

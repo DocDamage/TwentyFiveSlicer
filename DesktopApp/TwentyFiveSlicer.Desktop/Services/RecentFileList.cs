@@ -27,4 +27,13 @@ public sealed class RecentFileList
             _files.RemoveAt(_files.Count - 1);
         }
     }
+
+    public void Replace(IEnumerable<string> filePaths)
+    {
+        _files.Clear();
+        foreach (string filePath in filePaths.Reverse())
+        {
+            Add(filePath);
+        }
+    }
 }

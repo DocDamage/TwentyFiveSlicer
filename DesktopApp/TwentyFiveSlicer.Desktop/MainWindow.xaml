@@ -277,10 +277,18 @@
                                 <ComboBox x:Name="PresetComboBox"
                                           Margin="0,0,0,10"
                                           SelectionChanged="PresetComboBox_SelectionChanged" />
+                                <TextBox x:Name="PresetNameBox"
+                                         Margin="0,0,0,10"
+                                         Text="My Preset" />
                                 <WrapPanel>
                                     <Button Content="Suggest Borders" Style="{StaticResource ActionButtonStyle}" Click="SuggestBorders_Click" />
+                                    <Button Content="Analyze" Style="{StaticResource ActionButtonStyle}" Click="AnalyzeAssistant_Click" />
                                     <Button Content="Apply Prompt" Style="{StaticResource ActionButtonStyle}" Click="ApplyAssistantPrompt_Click" />
                                     <Button Content="Optimize Button" Style="{StaticResource ActionButtonStyle}" Click="OptimizeButton_Click" />
+                                    <Button Content="Apply Top Recommendation" Style="{StaticResource ActionButtonStyle}" Click="ApplyTopRecommendation_Click" />
+                                    <Button Content="Find Best Fit" Style="{StaticResource ActionButtonStyle}" Click="FindBestFit_Click" />
+                                    <Button Content="Optimize Across Sizes" Style="{StaticResource ActionButtonStyle}" Click="OptimizeAcrossSizes_Click" />
+                                    <Button Content="Save Preset" Style="{StaticResource ActionButtonStyle}" Click="SaveUserPreset_Click" />
                                     <Button Content="Batch Check" Style="{StaticResource ActionButtonStyle}" Click="BatchCheck_Click" />
                                     <Button Content="Batch Export" Style="{StaticResource ActionButtonStyle}" Click="BatchExport_Click" />
                                 </WrapPanel>

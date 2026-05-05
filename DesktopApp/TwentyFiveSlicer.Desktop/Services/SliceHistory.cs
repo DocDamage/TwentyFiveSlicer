@@ -19,6 +19,11 @@ public sealed class SliceHistory
 
     public void Push(SliceEditorState state)
     {
+        if (StateEquals(_current, state))
+        {
+            return;
+        }
+
         _undo.Push(_current.Snapshot());
         _current = state.Snapshot();
         _redo.Clear();
@@ -53,5 +58,13 @@ public sealed class SliceHistory
         _undo.Clear();
         _redo.Clear();
         _current = state.Snapshot();
+    }
+
+    private static bool StateEquals(SliceEditorState left, SliceEditorState right)
+    {
+        return Math.Abs(left.TargetWidth - right.TargetWidth) < 0.01d &&
+            Math.Abs(left.TargetHeight - right.TargetHeight) < 0.01d &&
+            left.VerticalBorders.SequenceEqual(right.VerticalBorders) &&
+            left.HorizontalBorders.SequenceEqual(right.HorizontalBorders);
     }
 }

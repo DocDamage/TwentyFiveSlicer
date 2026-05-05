@@ -13,6 +13,11 @@ namespace TwentyFiveSlicer.Desktop;
 
 public partial class MainWindow : Window
 {
+    private static readonly string AppStatePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "TwentyFiveSlicer",
+        "desktop-app-state.json");
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
@@ -28,6 +33,7 @@ public partial class MainWindow : Window
     private TextBox[] _horizontalTextBoxes = Array.Empty<TextBox>();
     private readonly RecentFileList _recentFiles = new();
     private readonly SliceAssistantService _assistant = new();
+    private readonly AppStateStore _appStateStore = new(AppStatePath);
     private readonly Dictionary<string, TwentyFiveSliceData> _presetLibrary = new()
     {
         ["Preset: Default"] = TwentyFiveSliceData.CreateDefault(),
@@ -39,6 +45,7 @@ public partial class MainWindow : Window
 
     private BitmapImage? _sourceImage;
     private string? _imagePath;
+    private SliceAssistantAnalysis? _lastAssistantAnalysis;
     private bool _isUpdatingUi;
     private bool _isSyncingTargetSize;
 
@@ -52,7 +59,8 @@ public partial class MainWindow : Window
         _horizontalValueTexts = [Horizontal1ValueText, Horizontal2ValueText, Horizontal3ValueText, Horizontal4ValueText];
         _verticalTextBoxes = [Vertical1TextBox, Vertical2TextBox, Vertical3TextBox, Vertical4TextBox];
         _horizontalTextBoxes = [Horizontal1TextBox, Horizontal2TextBox, Horizontal3TextBox, Horizontal4TextBox];
-        PresetComboBox.ItemsSource = _presetLibrary.Keys;
+        LoadAppState();
+        UpdatePresetLibraryUi();
 
         ApplyBorderStateToUi();
         _history = new SliceHistory(CreateEditorState());
@@ -206,9 +214,27 @@ public partial class MainWindow : Window
             return;
         }
 
-        ApplySliceData(ImageBorderSuggestionService.SuggestBorders(_sourceImage));
+        SliceBorderSuggestion suggestion = ImageBorderSuggestionService.SuggestBordersDetailed(_sourceImage);
+        ApplySliceData(suggestion.SliceData);
         RememberCurrentState();
-        AssistantResultText.Text = "Suggested borders from transparent image padding.";
+        AssistantResultText.Text = FormatBorderSuggestion(suggestion);
+    }
+
+    private void AnalyzeAssistant_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sourceImage is null)
+        {
+            AssistantResultText.Text = "Load an image before running slice analysis.";
+            return;
+        }
+
+        _lastAssistantAnalysis = _assistant.AnalyzeDetailed(
+            _sourceImage.PixelWidth,
+            _sourceImage.PixelHeight,
+            TargetWidthSlider.Value,
+            TargetHeightSlider.Value,
+            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+        AssistantResultText.Text = FormatAssistantAnalysis(_lastAssistantAnalysis);
     }
 
     private void ApplyAssistantPrompt_Click(object sender, RoutedEventArgs e)
@@ -231,6 +257,102 @@ public partial class MainWindow : Window
         ApplySliceData(new TwentyFiveSliceData([12d, 42d, 58d, 88d], [12d, 42d, 58d, 88d]));
         RememberCurrentState();
         AssistantResultText.Text = "Applied a balanced button preset with protected corners and centered stretch bands.";
+    }
+
+    private void ApplyTopRecommendation_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastAssistantAnalysis is null)
+        {
+            AnalyzeAssistant_Click(sender, e);
+        }
+
+        SliceAssistantAction? action = _lastAssistantAnalysis?.RecommendedActions.FirstOrDefault();
+        if (action is null)
+        {
+            AssistantResultText.Text = "No assistant recommendation is available yet.";
+            return;
+        }
+
+        SliceAssistantResult result = _assistant.Apply(action.Command, new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+        if (result.Applied)
+        {
+            ApplySliceData(result.SliceData);
+            RememberCurrentState();
+        }
+
+        AssistantResultText.Text = $"{action.Label}: {result.Message}";
+    }
+
+    private void FindBestFit_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sourceImage is null)
+        {
+            AssistantResultText.Text = "Load an image before finding a best-fit slice.";
+            return;
+        }
+
+        IReadOnlyList<SliceCandidateSuggestion> candidates = _assistant.RecommendCandidates(
+            _sourceImage.PixelWidth,
+            _sourceImage.PixelHeight,
+            TargetWidthSlider.Value,
+            TargetHeightSlider.Value,
+            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+
+        SliceCandidateSuggestion? best = candidates.FirstOrDefault();
+        if (best is null)
+        {
+            AssistantResultText.Text = "No slice candidates were generated.";
+            return;
+        }
+
+        ApplySliceData(best.SliceData);
+        RememberCurrentState();
+        AssistantResultText.Text = FormatCandidateSuggestions(candidates);
+    }
+
+    private void OptimizeAcrossSizes_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sourceImage is null)
+        {
+            AssistantResultText.Text = "Load an image before optimizing across sizes.";
+            return;
+        }
+
+        IReadOnlyList<SliceCandidateSuggestion> candidates = _assistant.RecommendCandidatesForTargets(
+            _sourceImage.PixelWidth,
+            _sourceImage.PixelHeight,
+            GetCommonPreviewTargets(),
+            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+
+        SliceCandidateSuggestion? best = candidates.FirstOrDefault();
+        if (best is null)
+        {
+            AssistantResultText.Text = "No batch optimization candidates were generated.";
+            return;
+        }
+
+        ApplySliceData(best.SliceData);
+        RememberCurrentState();
+        AssistantResultText.Text = FormatCandidateSuggestions(candidates);
+        UpdateBatchResults();
+    }
+
+    private void SaveUserPreset_Click(object sender, RoutedEventArgs e)
+    {
+        string presetName = PresetNameBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(presetName))
+        {
+            AssistantResultText.Text = "Enter a preset name before saving.";
+            return;
+        }
+
+        string key = presetName.StartsWith("User:", StringComparison.OrdinalIgnoreCase)
+            ? presetName
+            : $"User: {presetName}";
+        _presetLibrary[key] = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders);
+        UpdatePresetLibraryUi(key);
+        SaveAppState();
+        AssistantResultText.Text = $"Saved {key}.";
     }
 
     private void BatchCheck_Click(object sender, RoutedEventArgs e)
@@ -451,6 +573,7 @@ public partial class MainWindow : Window
         ImageSizeText.Text = $"{bitmap.PixelWidth} x {bitmap.PixelHeight} px";
         _recentFiles.Add(filePath);
         UpdateRecentFilesUi();
+        SaveAppState();
 
         ConfigureTargetSize(bitmap.PixelWidth, bitmap.PixelHeight);
         _history?.Reset(CreateEditorState());
@@ -681,6 +804,42 @@ public partial class MainWindow : Window
         _isUpdatingUi = false;
     }
 
+    private void UpdatePresetLibraryUi(string? selectedPreset = null)
+    {
+        _isUpdatingUi = true;
+        PresetComboBox.ItemsSource = null;
+        PresetComboBox.ItemsSource = _presetLibrary.Keys.OrderBy(key => key).ToArray();
+        PresetComboBox.SelectedItem = selectedPreset;
+        _isUpdatingUi = false;
+    }
+
+    private void LoadAppState()
+    {
+        DesktopAppState state = _appStateStore.Load();
+        _recentFiles.Replace(state.RecentFiles);
+        foreach ((string name, TwentyFiveSliceData data) in state.UserPresets)
+        {
+            _presetLibrary[name.StartsWith("User:", StringComparison.OrdinalIgnoreCase) ? name : $"User: {name}"] = data;
+        }
+
+        UpdateRecentFilesUi();
+    }
+
+    private void SaveAppState()
+    {
+        var state = new DesktopAppState
+        {
+            RecentFiles = _recentFiles.Files.ToList()
+        };
+
+        foreach ((string name, TwentyFiveSliceData data) in _presetLibrary.Where(pair => pair.Key.StartsWith("User:", StringComparison.OrdinalIgnoreCase)))
+        {
+            state.UserPresets[name] = data;
+        }
+
+        _appStateStore.Save(state);
+    }
+
     private void UpdateValidation()
     {
         if (_sourceImage is null)
@@ -733,6 +892,55 @@ public partial class MainWindow : Window
     private static string FormatValidationMessage(SliceValidationMessage message)
     {
         return $"{message.Severity}: {message.Text}";
+    }
+
+    private static string FormatAssistantAnalysis(SliceAssistantAnalysis analysis)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine(analysis.Summary);
+        foreach (string observation in analysis.Observations)
+        {
+            builder.AppendLine($"- {observation}");
+        }
+
+        builder.AppendLine("Recommended actions:");
+        foreach (SliceAssistantAction action in analysis.RecommendedActions)
+        {
+            builder.AppendLine($"- {action.Label}: {action.Reason}");
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string FormatBorderSuggestion(SliceBorderSuggestion suggestion)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine($"Suggested borders with {suggestion.Confidence:P0} confidence.");
+        foreach (string reason in suggestion.Reasons)
+        {
+            builder.AppendLine($"- {reason}");
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string FormatCandidateSuggestions(IReadOnlyList<SliceCandidateSuggestion> candidates)
+    {
+        var builder = new StringBuilder();
+        SliceCandidateSuggestion best = candidates[0];
+        builder.AppendLine($"Applied {best.Name} ({best.Score:P0}).");
+        foreach (string reason in best.Reasons)
+        {
+            builder.AppendLine($"- {reason}");
+        }
+
+        builder.AppendLine("Other candidates:");
+        foreach (SliceCandidateSuggestion candidate in candidates.Skip(1).Take(4))
+        {
+            builder.AppendLine($"- {candidate.Name}: {candidate.Score:P0}");
+        }
+
+        return builder.ToString().Trim();
     }
 
     private static PreviewTarget[] GetCommonPreviewTargets()
