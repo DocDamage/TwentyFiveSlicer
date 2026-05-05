@@ -217,7 +217,7 @@ public partial class MainWindow : Window
         SliceBorderSuggestion suggestion = ImageBorderSuggestionService.SuggestBordersDetailed(_sourceImage);
         ApplySliceData(suggestion.SliceData);
         RememberCurrentState();
-        AssistantResultText.Text = FormatBorderSuggestion(suggestion);
+        AssistantResultText.Text = AssistantReportFormatter.FormatBorderSuggestion(suggestion);
     }
 
     private void AnalyzeAssistant_Click(object sender, RoutedEventArgs e)
@@ -234,7 +234,7 @@ public partial class MainWindow : Window
             TargetWidthSlider.Value,
             TargetHeightSlider.Value,
             new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
-        AssistantResultText.Text = FormatAssistantAnalysis(_lastAssistantAnalysis);
+        AssistantResultText.Text = AssistantReportFormatter.FormatAnalysis(_lastAssistantAnalysis);
     }
 
     private void ApplyAssistantPrompt_Click(object sender, RoutedEventArgs e)
@@ -307,7 +307,7 @@ public partial class MainWindow : Window
 
         ApplySliceData(best.SliceData);
         RememberCurrentState();
-        AssistantResultText.Text = FormatCandidateSuggestions(candidates);
+        AssistantResultText.Text = AssistantReportFormatter.FormatCandidateSuggestions(candidates);
     }
 
     private void OptimizeAcrossSizes_Click(object sender, RoutedEventArgs e)
@@ -321,7 +321,7 @@ public partial class MainWindow : Window
         IReadOnlyList<SliceCandidateSuggestion> candidates = _assistant.RecommendCandidatesForTargets(
             _sourceImage.PixelWidth,
             _sourceImage.PixelHeight,
-            GetCommonPreviewTargets(),
+            PreviewTargetCatalog.GetCommonTargets(),
             new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
 
         SliceCandidateSuggestion? best = candidates.FirstOrDefault();
@@ -333,7 +333,7 @@ public partial class MainWindow : Window
 
         ApplySliceData(best.SliceData);
         RememberCurrentState();
-        AssistantResultText.Text = FormatCandidateSuggestions(candidates);
+        AssistantResultText.Text = AssistantReportFormatter.FormatCandidateSuggestions(candidates);
         UpdateBatchResults();
     }
 
@@ -378,7 +378,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        PreviewTarget[] targets = GetCommonPreviewTargets();
+        PreviewTarget[] targets = PreviewTargetCatalog.GetCommonTargets();
         SliceEditorState previous = CreateEditorState();
         foreach (PreviewTarget target in targets)
         {
@@ -866,7 +866,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        PreviewTarget[] targets = GetCommonPreviewTargets();
+        PreviewTarget[] targets = PreviewTargetCatalog.GetCommonTargets();
 
         IReadOnlyList<BatchPreviewResult> results = BatchPreviewAnalyzer.Analyze(
             _sourceImage.PixelWidth,
@@ -892,66 +892,6 @@ public partial class MainWindow : Window
     private static string FormatValidationMessage(SliceValidationMessage message)
     {
         return $"{message.Severity}: {message.Text}";
-    }
-
-    private static string FormatAssistantAnalysis(SliceAssistantAnalysis analysis)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine(analysis.Summary);
-        foreach (string observation in analysis.Observations)
-        {
-            builder.AppendLine($"- {observation}");
-        }
-
-        builder.AppendLine("Recommended actions:");
-        foreach (SliceAssistantAction action in analysis.RecommendedActions)
-        {
-            builder.AppendLine($"- {action.Label}: {action.Reason}");
-        }
-
-        return builder.ToString().Trim();
-    }
-
-    private static string FormatBorderSuggestion(SliceBorderSuggestion suggestion)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine($"Suggested borders with {suggestion.Confidence:P0} confidence.");
-        foreach (string reason in suggestion.Reasons)
-        {
-            builder.AppendLine($"- {reason}");
-        }
-
-        return builder.ToString().Trim();
-    }
-
-    private static string FormatCandidateSuggestions(IReadOnlyList<SliceCandidateSuggestion> candidates)
-    {
-        var builder = new StringBuilder();
-        SliceCandidateSuggestion best = candidates[0];
-        builder.AppendLine($"Applied {best.Name} ({best.Score:P0}).");
-        foreach (string reason in best.Reasons)
-        {
-            builder.AppendLine($"- {reason}");
-        }
-
-        builder.AppendLine("Other candidates:");
-        foreach (SliceCandidateSuggestion candidate in candidates.Skip(1).Take(4))
-        {
-            builder.AppendLine($"- {candidate.Name}: {candidate.Score:P0}");
-        }
-
-        return builder.ToString().Trim();
-    }
-
-    private static PreviewTarget[] GetCommonPreviewTargets()
-    {
-        return
-        [
-            new("128 square", 128d, 128d),
-            new("256 wide", 256d, 96d),
-            new("512 square", 512d, 512d),
-            new("1080p panel", 1920d, 1080d)
-        ];
     }
 
     private static void NormalizeBorders(double[] borders)

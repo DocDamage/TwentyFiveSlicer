@@ -22,7 +22,9 @@ var tests = new (string Name, Action Test)[]
     ("SliceAssistant ranks candidate presets", SliceAssistantRanksCandidatePresets),
     ("SliceAssistant candidate scoring reflects warnings", SliceAssistantCandidateScoringReflectsWarnings),
     ("SliceAssistant ranks candidates across target sizes", SliceAssistantRanksCandidatesAcrossTargetSizes),
-    ("SliceAssistant aggregate candidates include target coverage", SliceAssistantAggregateCandidatesIncludeTargetCoverage)
+    ("SliceAssistant aggregate candidates include target coverage", SliceAssistantAggregateCandidatesIncludeTargetCoverage),
+    ("AssistantReportFormatter formats candidate summaries", AssistantReportFormatterFormatsCandidateSummaries),
+    ("PreviewTargetCatalog exposes common targets", PreviewTargetCatalogExposesCommonTargets)
 };
 
 int failures = 0;
@@ -291,6 +293,30 @@ static void SliceAssistantAggregateCandidatesIncludeTargetCoverage()
 
     Assert.True(candidates[0].Reasons.Any(reason => reason.Contains("2 target", StringComparison.OrdinalIgnoreCase)), "Best candidate should explain how many targets were evaluated.");
     Assert.True(candidates[0].Reasons.Any(reason => reason.Contains("average", StringComparison.OrdinalIgnoreCase)), "Best candidate should report an aggregate score reason.");
+}
+
+static void AssistantReportFormatterFormatsCandidateSummaries()
+{
+    var candidates = new[]
+    {
+        new SliceCandidateSuggestion("Button fit", TwentyFiveSliceData.CreateDefault(), 0.91d, ["No validation warnings.", "Asset classification matches."]),
+        new SliceCandidateSuggestion("Panel fit", TwentyFiveSliceData.CreateDefault(), 0.72d, ["No validation warnings."])
+    };
+
+    string report = AssistantReportFormatter.FormatCandidateSuggestions(candidates);
+
+    Assert.True(report.Contains("Applied Button fit", StringComparison.OrdinalIgnoreCase), "Report should name the applied candidate.");
+    Assert.True(report.Contains("91", StringComparison.OrdinalIgnoreCase), "Report should include candidate score.");
+    Assert.True(report.Contains("Other candidates", StringComparison.OrdinalIgnoreCase), "Report should include alternatives.");
+}
+
+static void PreviewTargetCatalogExposesCommonTargets()
+{
+    IReadOnlyList<PreviewTarget> targets = PreviewTargetCatalog.GetCommonTargets();
+
+    Assert.True(targets.Count >= 4, "Catalog should expose multiple common preview targets.");
+    Assert.True(targets.Any(target => target.Name.Contains("square", StringComparison.OrdinalIgnoreCase)), "Catalog should include square targets.");
+    Assert.True(targets.Any(target => target.Width == 1920d && target.Height == 1080d), "Catalog should include 1080p target.");
 }
 
 static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int left, int right, int top, int bottom)
