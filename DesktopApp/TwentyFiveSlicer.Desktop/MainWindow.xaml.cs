@@ -286,9 +286,22 @@ public partial class MainWindow : Window
             : $"Asking {provider.DisplayName} with image context...";
 
         CloudAiResult result = await _cloudAiClient.AskAsync(provider, settings, prompt, image);
-        AssistantResultText.Text = result.Success
-            ? $"Cloud AI ({provider.DisplayName}) advice:\n{result.Advice}"
-            : $"Cloud AI was unavailable: {result.ErrorMessage}\n\nLocal fallback:\n{BuildLocalFallbackAdvice()}";
+        if (!result.Success)
+        {
+            AssistantResultText.Text = $"Cloud AI was unavailable: {result.ErrorMessage}\n\nLocal fallback:\n{BuildLocalFallbackAdvice()}";
+            return;
+        }
+
+        if (CloudAiAdviceParser.TryParseSliceData(result.Advice, out TwentyFiveSliceData? parsedSliceData) &&
+            parsedSliceData is TwentyFiveSliceData suggestedSliceData)
+        {
+            ApplySliceData(suggestedSliceData);
+            RememberCurrentState();
+            AssistantResultText.Text = $"Cloud AI ({provider.DisplayName}) advice applied:\n{result.Advice}";
+            return;
+        }
+
+        AssistantResultText.Text = $"Cloud AI ({provider.DisplayName}) advice:\n{result.Advice}";
     }
 
     private void OptimizeButton_Click(object sender, RoutedEventArgs e)
@@ -1028,7 +1041,7 @@ public partial class MainWindow : Window
         builder.AppendLine($"Vertical borders: {string.Join(", ", _verticalBorders.Select(value => $"{value:0.#}%"))}");
         builder.AppendLine($"Horizontal borders: {string.Join(", ", _horizontalBorders.Select(value => $"{value:0.#}%"))}");
         builder.AppendLine($"Debug overlay: {DebuggingViewCheckBox.IsChecked == true}; source guides: {SourceComparisonCheckBox.IsChecked == true}; flip X: {FlipXCheckBox.IsChecked == true}; flip Y: {FlipYCheckBox.IsChecked == true}");
-        builder.AppendLine("Return concise advice plus exact suggested verticalBorders and horizontalBorders if changes are recommended.");
+        builder.AppendLine("Return concise advice. If border edits are recommended, include exact JSON with verticalBorders and horizontalBorders arrays of four percentages each.");
 
         if (!string.IsNullOrWhiteSpace(AssistantPromptBox.Text))
         {

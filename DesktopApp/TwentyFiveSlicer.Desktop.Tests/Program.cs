@@ -42,7 +42,9 @@ var tests = new (string Name, Action Test)[]
     ("CloudAiClient parses Anthropic responses", CloudAiClientParsesAnthropicResponses),
     ("CloudAiClient parses Gemini responses", CloudAiClientParsesGeminiResponses),
     ("CloudAiClient reports HTTP failures", CloudAiClientReportsHttpFailures),
-    ("CloudAiClient reports missing API key", CloudAiClientReportsMissingApiKey)
+    ("CloudAiClient reports missing API key", CloudAiClientReportsMissingApiKey),
+    ("CloudAiAdviceParser extracts JSON border suggestions", CloudAiAdviceParserExtractsJsonBorderSuggestions),
+    ("CloudAiAdviceParser extracts inline border suggestions", CloudAiAdviceParserExtractsInlineBorderSuggestions)
 };
 
 int failures = 0;
@@ -674,6 +676,30 @@ static void CloudAiClientReportsMissingApiKey()
 
     Assert.True(!result.Success, "Missing API key should be reported as unsuccessful.");
     Assert.True(result.ErrorMessage.Contains("TFS_TEST_MISSING_KEY", StringComparison.OrdinalIgnoreCase), "Error should name missing env var.");
+}
+
+static void CloudAiAdviceParserExtractsJsonBorderSuggestions()
+{
+    string advice = """
+    Use slightly thinner edges.
+    {
+      "verticalBorders": [12, 42, 58, 88],
+      "horizontalBorders": [10, 40, 60, 90]
+    }
+    """;
+
+    Assert.True(CloudAiAdviceParser.TryParseSliceData(advice, out TwentyFiveSliceData? data), "Parser should extract JSON border arrays from advice.");
+    Assert.SequenceEqual(new[] { 12d, 42d, 58d, 88d }, data!.VerticalBorders);
+    Assert.SequenceEqual(new[] { 10d, 40d, 60d, 90d }, data.HorizontalBorders);
+}
+
+static void CloudAiAdviceParserExtractsInlineBorderSuggestions()
+{
+    string advice = "Suggested verticalBorders: 8, 36, 64, 92 and horizontalBorders: 14 / 44 / 56 / 86.";
+
+    Assert.True(CloudAiAdviceParser.TryParseSliceData(advice, out TwentyFiveSliceData? data), "Parser should extract inline border lists from advice.");
+    Assert.SequenceEqual(new[] { 8d, 36d, 64d, 92d }, data!.VerticalBorders);
+    Assert.SequenceEqual(new[] { 14d, 44d, 56d, 86d }, data.HorizontalBorders);
 }
 
 static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int left, int right, int top, int bottom)
