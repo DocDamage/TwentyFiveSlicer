@@ -66,7 +66,10 @@ var tests = new (string Name, Action Test)[]
     ("IdeAssistantBridge returns local analysis JSON", IdeAssistantBridgeReturnsLocalAnalysisJson),
     ("IdeAssistantBridge applies prompt as JSON", IdeAssistantBridgeAppliesPromptAsJson),
     ("IdeAssistantBridge returns prompt preview JSON", IdeAssistantBridgeReturnsPromptPreviewJson),
-    ("IdeAssistantBridge returns structured error JSON", IdeAssistantBridgeReturnsStructuredErrorJson)
+    ("IdeAssistantBridge returns structured error JSON", IdeAssistantBridgeReturnsStructuredErrorJson),
+    ("IdeAssistantBridge returns suggestion review JSON", IdeAssistantBridgeReturnsSuggestionReviewJson),
+    ("SliceSuggestionReview blocks risky AI cuts", SliceSuggestionReviewBlocksRiskyAiCuts),
+    ("SliceSuggestionReview rewards warning reductions", SliceSuggestionReviewRewardsWarningReductions)
 };
 
 int failures = 0;
@@ -1085,6 +1088,63 @@ static void IdeAssistantBridgeReturnsStructuredErrorJson()
     Assert.Equal("twenty-five-slicer.ai.error.v1", root.GetProperty("schema").GetString(), "Error output should expose a stable schema name.");
     Assert.Equal("ArgumentError", root.GetProperty("errorCode").GetString(), "Error output should include a machine-readable code.");
     Assert.Equal("Missing required option --slice.", root.GetProperty("message").GetString(), "Error output should include the display message.");
+}
+
+static void IdeAssistantBridgeReturnsSuggestionReviewJson()
+{
+    var input = new IdeAssistantInput(
+        TwentyFiveSliceData.CreateDefault(),
+        SourceWidth: 1000d,
+        SourceHeight: 1000d,
+        TargetWidth: 400d,
+        TargetHeight: 400d);
+    var proposed = new TwentyFiveSliceData([8d, 40d, 60d, 92d], [8d, 40d, 60d, 92d]);
+
+    string json = IdeAssistantBridge.ReviewSuggestionJson(input, proposed);
+    using JsonDocument document = JsonDocument.Parse(json);
+    JsonElement root = document.RootElement;
+
+    Assert.Equal("twenty-five-slicer.ai.review.v1", root.GetProperty("schema").GetString(), "Review output should expose a stable schema name.");
+    Assert.True(root.GetProperty("review").GetProperty("safeToApply").GetBoolean(), "Safe suggestions should be marked safe in IDE review JSON.");
+    Assert.Equal(4, root.GetProperty("review").GetProperty("verticalPixelDeltas").GetArrayLength(), "Review JSON should expose vertical pixel deltas.");
+}
+
+static void SliceSuggestionReviewBlocksRiskyAiCuts()
+{
+    var current = TwentyFiveSliceData.CreateDefault();
+    var risky = new TwentyFiveSliceData([35d, 45d, 55d, 65d], [35d, 45d, 55d, 65d]);
+
+    SliceSuggestionReview review = SliceSuggestionReviewService.Review(
+        current,
+        risky,
+        sourceWidth: 1000d,
+        sourceHeight: 1000d,
+        targetWidth: 200d,
+        targetHeight: 200d);
+
+    Assert.True(!review.SafeToApply, "Risky suggestions should not be marked safe to apply.");
+    Assert.True(review.Score < 0.7d, "Risky suggestions should receive a lower confidence score.");
+    Assert.True(review.Risks.Any(risk => risk.Contains("fixed", StringComparison.OrdinalIgnoreCase)), "Risk review should explain fixed-region problems.");
+}
+
+static void SliceSuggestionReviewRewardsWarningReductions()
+{
+    var current = new TwentyFiveSliceData([35d, 45d, 55d, 65d], [35d, 45d, 55d, 65d]);
+    var proposed = new TwentyFiveSliceData([8d, 40d, 60d, 92d], [8d, 40d, 60d, 92d]);
+
+    SliceSuggestionReview review = SliceSuggestionReviewService.Review(
+        current,
+        proposed,
+        sourceWidth: 1000d,
+        sourceHeight: 1000d,
+        targetWidth: 400d,
+        targetHeight: 400d);
+
+    Assert.True(review.SafeToApply, "Suggestions that remove target warnings should be safe to apply.");
+    Assert.True(review.Score >= 0.8d, "Suggestions that reduce warnings should receive a strong confidence score.");
+    Assert.True(review.Improvements.Any(improvement => improvement.Contains("reduced", StringComparison.OrdinalIgnoreCase)), "Review should explain warning reductions.");
+    Assert.Equal(4, review.VerticalPixelDeltas.Count, "Review should expose per-guide vertical pixel deltas.");
+    Assert.Equal(4, review.HorizontalPixelDeltas.Count, "Review should expose per-guide horizontal pixel deltas.");
 }
 
 static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int left, int right, int top, int bottom)

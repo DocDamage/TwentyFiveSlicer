@@ -255,10 +255,11 @@ dotnet run --project .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.
 dotnet run --project .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj -- analyze --slice .\button.25slice.json --source-width 256 --source-height 128 --target-width 640 --target-height 160
 dotnet run --project .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj -- apply --slice .\button.25slice.json --prompt "make this a button"
 dotnet run --project .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj -- prompt --slice .\button.25slice.json --prompt "show the exact cloud prompt"
+dotnet run --project .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj -- review --slice .\button.25slice.json --proposed .\suggested.25slice.json --source-width 256 --source-height 128 --target-width 640 --target-height 160
 dotnet run --project .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj -- cloud --slice .\button.25slice.json --provider openai --prompt "recommend safer borders"
 ```
 
-The `cloud` command supports `--model`, `--endpoint`, `--api-key-env`, and `--image`. Use `--slice -` to read slice JSON from stdin. API keys still come from environment variables. Errors are returned as JSON with the `twenty-five-slicer.ai.error.v1` schema.
+The `review` command is the deterministic accuracy gate for AI-suggested cuts. The `cloud` command also includes this review when exact border JSON is parsed from a model response. The `cloud` command supports `--model`, `--endpoint`, `--api-key-env`, and `--image`. Use `--slice -` to read slice JSON from stdin. API keys still come from environment variables. Errors are returned as JSON with the `twenty-five-slicer.ai.error.v1` schema.
 
 Common API key environment variables:
 

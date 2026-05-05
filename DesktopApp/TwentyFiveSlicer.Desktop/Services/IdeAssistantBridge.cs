@@ -94,6 +94,23 @@ public static class IdeAssistantBridge
         return JsonSerializer.Serialize(payload, JsonOptions);
     }
 
+    public static string ReviewSuggestionJson(IdeAssistantInput input, TwentyFiveSliceData proposedSliceData)
+    {
+        var payload = new
+        {
+            schema = "twenty-five-slicer.ai.review.v1",
+            review = SliceSuggestionReviewService.Review(
+                input.SliceData,
+                proposedSliceData,
+                input.SourceWidth,
+                input.SourceHeight,
+                input.TargetWidth,
+                input.TargetHeight)
+        };
+
+        return JsonSerializer.Serialize(payload, JsonOptions);
+    }
+
     public static string ErrorJson(string message, string errorCode = "Error")
     {
         var payload = new
@@ -137,6 +154,16 @@ public static class IdeAssistantBridge
             CloudAiAdviceParser.TryParseSliceData(result.Advice, out parsedSliceData);
         }
 
+        SliceSuggestionReview? review = parsedSliceData is null
+            ? null
+            : SliceSuggestionReviewService.Review(
+                input.SliceData,
+                parsedSliceData,
+                input.SourceWidth,
+                input.SourceHeight,
+                input.TargetWidth,
+                input.TargetHeight);
+
         var payload = new
         {
             schema = "twenty-five-slicer.ai.cloud.v1",
@@ -145,7 +172,8 @@ public static class IdeAssistantBridge
             result.Success,
             advice = result.Advice,
             result.ErrorMessage,
-            parsedSliceData
+            parsedSliceData,
+            review
         };
 
         return JsonSerializer.Serialize(payload, JsonOptions);

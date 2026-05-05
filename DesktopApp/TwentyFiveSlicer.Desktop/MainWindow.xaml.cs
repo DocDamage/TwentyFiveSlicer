@@ -296,9 +296,23 @@ public partial class MainWindow : Window
         if (CloudAiAdviceParser.TryParseSliceData(result.Advice, out TwentyFiveSliceData? parsedSliceData) &&
             parsedSliceData is TwentyFiveSliceData suggestedSliceData)
         {
-            ApplySliceData(suggestedSliceData);
-            RememberCurrentState();
-            AssistantResultText.Text = $"Cloud AI ({provider.DisplayName}) advice applied:\n{result.Advice}";
+            SliceSuggestionReview review = SliceSuggestionReviewService.Review(
+                new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+                suggestedSliceData,
+                _sourceImage?.PixelWidth ?? TargetWidthSlider.Value,
+                _sourceImage?.PixelHeight ?? TargetHeightSlider.Value,
+                TargetWidthSlider.Value,
+                TargetHeightSlider.Value);
+
+            if (review.SafeToApply)
+            {
+                ApplySliceData(suggestedSliceData);
+                RememberCurrentState();
+                AssistantResultText.Text = $"Cloud AI ({provider.DisplayName}) advice passed deterministic review and was applied.\nScore: {review.Score:P0}\n{FormatSuggestionReview(review)}\n\nAdvice:\n{result.Advice}";
+                return;
+            }
+
+            AssistantResultText.Text = $"Cloud AI ({provider.DisplayName}) suggested borders, but deterministic review did not auto-apply them.\nScore: {review.Score:P0}\n{FormatSuggestionReview(review)}\n\nAdvice:\n{result.Advice}";
             return;
         }
 
@@ -1111,6 +1125,32 @@ public partial class MainWindow : Window
             TargetHeightSlider.Value,
             new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
         return AssistantReportFormatter.FormatAnalysis(analysis);
+    }
+
+    private static string FormatSuggestionReview(SliceSuggestionReview review)
+    {
+        var builder = new StringBuilder();
+        if (review.Improvements.Count > 0)
+        {
+            builder.AppendLine("Improvements:");
+            foreach (string improvement in review.Improvements)
+            {
+                builder.AppendLine($"- {improvement}");
+            }
+        }
+
+        if (review.Risks.Count > 0)
+        {
+            builder.AppendLine("Risks:");
+            foreach (string risk in review.Risks)
+            {
+                builder.AppendLine($"- {risk}");
+            }
+        }
+
+        builder.AppendLine($"Vertical guide pixel deltas: {string.Join(", ", review.VerticalPixelDeltas.Select(delta => $"{delta:+0.##;-0.##;0}px"))}");
+        builder.AppendLine($"Horizontal guide pixel deltas: {string.Join(", ", review.HorizontalPixelDeltas.Select(delta => $"{delta:+0.##;-0.##;0}px"))}");
+        return builder.ToString().Trim();
     }
 
     private DesktopSessionState CreateSessionState()

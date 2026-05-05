@@ -18,6 +18,7 @@ try
         "analyze" => IdeAssistantBridge.AnalyzeLocalJson(ReadInput(options)),
         "apply" => IdeAssistantBridge.ApplyPromptJson(ReadInput(options), GetOption(options, "prompt", "make practical improvements")),
         "prompt" => IdeAssistantBridge.BuildPromptJson(ReadInput(options), GetOption(options, "prompt", "analyze and recommend improvements")),
+        "review" => IdeAssistantBridge.ReviewSuggestionJson(ReadInput(options), ReadSliceData(GetRequiredOption(options, "proposed"))),
         "cloud" => await RunCloudAsync(options),
         _ => throw new InvalidOperationException($"Unknown command '{args[0]}'.")
     };
@@ -53,11 +54,7 @@ static async Task<string> RunCloudAsync(Dictionary<string, string> options)
 static IdeAssistantInput ReadInput(Dictionary<string, string> options)
 {
     string slicePath = GetRequiredOption(options, "slice");
-    string json = slicePath == "-"
-        ? Console.In.ReadToEnd()
-        : File.ReadAllText(slicePath);
-    TwentyFiveSliceData sliceData = JsonSerializer.Deserialize<TwentyFiveSliceData>(json)
-        ?? throw new InvalidDataException("Slice JSON did not contain valid 25-slice data.");
+    TwentyFiveSliceData sliceData = ReadSliceData(slicePath);
 
     return new IdeAssistantInput(
         sliceData,
@@ -65,6 +62,15 @@ static IdeAssistantInput ReadInput(Dictionary<string, string> options)
         GetDoubleOption(options, "source-height", 100d),
         GetDoubleOption(options, "target-width", 640d),
         GetDoubleOption(options, "target-height", 360d));
+}
+
+static TwentyFiveSliceData ReadSliceData(string slicePath)
+{
+    string json = slicePath == "-"
+        ? Console.In.ReadToEnd()
+        : File.ReadAllText(slicePath);
+    return JsonSerializer.Deserialize<TwentyFiveSliceData>(json)
+        ?? throw new InvalidDataException("Slice JSON did not contain valid 25-slice data.");
 }
 
 static CloudAiImageInput ReadImage(string imagePath)
@@ -160,6 +166,7 @@ static void PrintHelp()
       analyze --slice slice.json --source-width 100 --source-height 100 --target-width 640 --target-height 360
       apply --slice slice.json --prompt "make this a button"
       prompt --slice slice.json --prompt "recommend borders"
+      review --slice current.json --proposed proposed.json --source-width 100 --source-height 100 --target-width 640 --target-height 360
       cloud --slice slice.json --provider openai --prompt "recommend borders" [--model gpt-5.1] [--api-key-env OPENAI_API_KEY] [--endpoint URL] [--image image.png]
 
     Use --slice - to read Unity-compatible slice JSON from stdin.
