@@ -44,7 +44,9 @@ var tests = new (string Name, Action Test)[]
     ("CloudAiClient reports HTTP failures", CloudAiClientReportsHttpFailures),
     ("CloudAiClient reports missing API key", CloudAiClientReportsMissingApiKey),
     ("CloudAiAdviceParser extracts JSON border suggestions", CloudAiAdviceParserExtractsJsonBorderSuggestions),
-    ("CloudAiAdviceParser extracts inline border suggestions", CloudAiAdviceParserExtractsInlineBorderSuggestions)
+    ("CloudAiAdviceParser extracts inline border suggestions", CloudAiAdviceParserExtractsInlineBorderSuggestions),
+    ("CloudAiAdviceParser extracts fenced snake case JSON suggestions", CloudAiAdviceParserExtractsFencedSnakeCaseJsonSuggestions),
+    ("CloudAiAdviceParser extracts spaced percentage labels", CloudAiAdviceParserExtractsSpacedPercentageLabels)
 };
 
 int failures = 0;
@@ -700,6 +702,33 @@ static void CloudAiAdviceParserExtractsInlineBorderSuggestions()
     Assert.True(CloudAiAdviceParser.TryParseSliceData(advice, out TwentyFiveSliceData? data), "Parser should extract inline border lists from advice.");
     Assert.SequenceEqual(new[] { 8d, 36d, 64d, 92d }, data!.VerticalBorders);
     Assert.SequenceEqual(new[] { 14d, 44d, 56d, 86d }, data.HorizontalBorders);
+}
+
+static void CloudAiAdviceParserExtractsFencedSnakeCaseJsonSuggestions()
+{
+    string advice = """
+    Try this:
+
+    ```json
+    {
+      "vertical_borders": ["9%", "39%", "61%", "91%"],
+      "horizontal_borders": ["11%", "41%", "59%", "89%"]
+    }
+    ```
+    """;
+
+    Assert.True(CloudAiAdviceParser.TryParseSliceData(advice, out TwentyFiveSliceData? data), "Parser should extract fenced snake_case JSON with percentage strings.");
+    Assert.SequenceEqual(new[] { 9d, 39d, 61d, 91d }, data!.VerticalBorders);
+    Assert.SequenceEqual(new[] { 11d, 41d, 59d, 89d }, data.HorizontalBorders);
+}
+
+static void CloudAiAdviceParserExtractsSpacedPercentageLabels()
+{
+    string advice = "Vertical borders = 7%, 34%, 66%, 93%. Horizontal borders = 15%, 45%, 55%, 85%.";
+
+    Assert.True(CloudAiAdviceParser.TryParseSliceData(advice, out TwentyFiveSliceData? data), "Parser should extract spaced labels with percentage values.");
+    Assert.SequenceEqual(new[] { 7d, 34d, 66d, 93d }, data!.VerticalBorders);
+    Assert.SequenceEqual(new[] { 15d, 45d, 55d, 85d }, data.HorizontalBorders);
 }
 
 static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int left, int right, int top, int bottom)
