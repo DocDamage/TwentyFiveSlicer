@@ -37,6 +37,7 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     private bool _activeGuideIsVertical;
 
     public event EventHandler<SliceGuideEditEventArgs>? GuideEditChanged;
+    public event EventHandler<double>? PreviewZoomChanged;
 
     public TwentyFiveSlicePreviewControl()
     {
@@ -119,7 +120,7 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         get => _previewZoom;
         set
         {
-            double zoom = Math.Clamp(value, 0.5d, 2d);
+            double zoom = Math.Round(Math.Clamp(value, 0.5d, 2d), 4);
             if (Math.Abs(_previewZoom - zoom) < 0.0001d)
             {
                 return;
@@ -127,7 +128,13 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
 
             _previewZoom = zoom;
             InvalidateVisual();
+            PreviewZoomChanged?.Invoke(this, _previewZoom);
         }
+    }
+
+    public void AdjustZoomFromMouseWheel(int wheelDelta)
+    {
+        PreviewZoom += (wheelDelta / 120d) * 0.05d;
     }
 
     public bool GuideEditingEnabled
@@ -280,6 +287,13 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         _activeGuideIndex = -1;
         ReleaseMouseCapture();
         Cursor = null;
+        e.Handled = true;
+    }
+
+    protected override void OnMouseWheel(System.Windows.Input.MouseWheelEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        AdjustZoomFromMouseWheel(e.Delta);
         e.Handled = true;
     }
 

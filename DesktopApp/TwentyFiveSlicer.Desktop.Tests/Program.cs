@@ -18,6 +18,7 @@ var tests = new (string Name, Action Test)[]
     ("Preview control renders export bitmap", PreviewControlRendersExportBitmap),
     ("Preview control export bitmap encodes as PNG", PreviewControlExportBitmapEncodesAsPng),
     ("Preview control clamps zoom", PreviewControlClampsZoomValue),
+    ("Preview control adjusts zoom from mouse wheel", PreviewControlAdjustsZoomFromMouseWheel),
     ("Slice data JSON stays Unity compatible", SliceDataJsonStaysUnityCompatible),
     ("SliceValidation warns when fixed columns exceed target width", SliceValidationWarnsWhenFixedColumnsExceedTargetWidth),
     ("RecentFileList keeps newest unique files first", RecentFileListKeepsNewestUniqueFilesFirst),
@@ -223,6 +224,23 @@ static void PreviewControlClampsZoomValue()
 
         preview.PreviewZoom = 1.35d;
         Assert.Equal(1.35d, preview.PreviewZoom, "Preview zoom should preserve valid zoom values.");
+    });
+}
+
+static void PreviewControlAdjustsZoomFromMouseWheel()
+{
+    RunOnStaThread(() =>
+    {
+        var preview = new TwentyFiveSlicePreviewControl();
+        double lastZoom = 0d;
+        preview.PreviewZoomChanged += (_, zoom) => lastZoom = zoom;
+
+        preview.AdjustZoomFromMouseWheel(120);
+        Assert.Equal(1.05d, preview.PreviewZoom, "Mouse wheel up should zoom in by one editor-style increment.");
+        Assert.Equal(1.05d, lastZoom, "Preview should notify listeners when wheel zoom changes.");
+
+        preview.AdjustZoomFromMouseWheel(-240);
+        Assert.Equal(0.95d, preview.PreviewZoom, "Mouse wheel down should zoom out by proportional increments.");
     });
 }
 

@@ -69,6 +69,7 @@ public partial class MainWindow : Window
         CloudAiProviderComboBox.ItemsSource = _cloudAiProviders;
         CloudAiProviderComboBox.DisplayMemberPath = nameof(CloudAiProviderDescriptor.DisplayName);
         CloudAiProviderComboBox.SelectedValuePath = nameof(CloudAiProviderDescriptor.Id);
+        PreviewControl.PreviewZoomChanged += PreviewControl_PreviewZoomChanged;
         LoadAppState();
         UpdatePresetLibraryUi();
 
@@ -580,6 +581,19 @@ public partial class MainWindow : Window
         {
             RememberCurrentState();
         }
+    }
+
+    private void PreviewControl_PreviewZoomChanged(object? sender, double zoom)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        _isUpdatingUi = true;
+        PreviewZoomSlider.Value = Math.Clamp(zoom, PreviewZoomSlider.Minimum, PreviewZoomSlider.Maximum);
+        PreviewZoomValueText.Text = $"{PreviewZoomSlider.Value * 100d:0}%";
+        _isUpdatingUi = false;
     }
 
     private void RecentFilesComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
