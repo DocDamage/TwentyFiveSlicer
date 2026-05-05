@@ -27,6 +27,8 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     private double _targetWidth = 640d;
     private double _targetHeight = 360d;
     private double _previewZoom = 1d;
+    private double _previewPanX;
+    private double _previewPanY;
     private bool _debuggingView;
     private bool _flipX;
     private bool _flipY;
@@ -35,6 +37,8 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     private Rect _lastPreviewRect;
     private int _activeVerticalGuideIndex = -1;
     private int _activeHorizontalGuideIndex = -1;
+    private bool _isPanning;
+    private Point _lastPanPoint;
 
     public event EventHandler<SliceGuideEditEventArgs>? GuideEditChanged;
     public event EventHandler<double>? PreviewZoomChanged;
@@ -132,14 +136,64 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         }
     }
 
+    public double PreviewPanX
+    {
+        get => _previewPanX;
+        set
+        {
+            double pan = Math.Round(value, 4);
+            if (Math.Abs(_previewPanX - pan) < 0.0001d)
+            {
+                return;
+            }
+
+            _previewPanX = pan;
+            InvalidateVisual();
+        }
+    }
+
+    public double PreviewPanY
+    {
+        get => _previewPanY;
+        set
+        {
+            double pan = Math.Round(value, 4);
+            if (Math.Abs(_previewPanY - pan) < 0.0001d)
+            {
+                return;
+            }
+
+            _previewPanY = pan;
+            InvalidateVisual();
+        }
+    }
+
     public void AdjustZoomFromMouseWheel(int wheelDelta)
     {
         PreviewZoom += (wheelDelta / 120d) * 0.05d;
     }
 
+    public void AdjustPreviewPan(double deltaX, double deltaY)
+    {
+        PreviewPanX += deltaX;
+        PreviewPanY += deltaY;
+    }
+
     public void ResetPreviewZoom()
     {
         PreviewZoom = 1d;
+    }
+
+    public void ResetPreviewPan()
+    {
+        PreviewPanX = 0d;
+        PreviewPanY = 0d;
+    }
+
+    public void ResetPreviewView()
+    {
+        PreviewZoom = 1d;
+        ResetPreviewPan();
     }
 
     public bool GuideEditingEnabled
@@ -206,19 +260,26 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
             return;
         }
 
-        double scale = Math.Min(availableRect.Width / safeTargetWidth, availableRect.Height / safeTargetHeight);
-        if (double.IsNaN(scale) || double.IsInfinity(scale) || scale <= 0d)
+        PreviewViewport viewport = PreviewViewportCalculator.Calculate(
+            availableRect,
+            safeTargetWidth,
+            safeTargetHeight,
+            PreviewZoom,
+            PreviewPanX,
+            PreviewPanY);
+
+        if (Math.Abs(_previewPanX - viewport.PanX) >= 0.0001d)
         {
-            scale = 1d;
+            _previewPanX = viewport.PanX;
         }
 
-        scale *= PreviewZoom;
+        if (Math.Abs(_previewPanY - viewport.PanY) >= 0.0001d)
+        {
+            _previewPanY = viewport.PanY;
+        }
 
-        var previewRect = new Rect(
-            availableRect.X + (availableRect.Width - (safeTargetWidth * scale)) / 2d,
-            availableRect.Y + (availableRect.Height - (safeTargetHeight * scale)) / 2d,
-            safeTargetWidth * scale,
-            safeTargetHeight * scale);
+        Rect previewRect = viewport.PreviewRect;
+        double scale = previewRect.Width / safeTargetWidth;
         _lastPreviewRect = previewRect;
 
         DrawShadow(drawingContext, previewRect);
@@ -242,12 +303,27 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     protected override void OnMouseDown(System.Windows.Input.MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
-        if (!GuideEditingEnabled || _sourceImage is null || !_lastPreviewRect.Contains(e.GetPosition(this)))
+        Point point = e.GetPosition(this);
+        if (_sourceImage is null || !_lastPreviewRect.Contains(point))
         {
             return;
         }
 
-        Point point = e.GetPosition(this);
+        if (e.ChangedButton is System.Windows.Input.MouseButton.Middle or System.Windows.Input.MouseButton.Right)
+        {
+            _isPanning = true;
+            _lastPanPoint = point;
+            CaptureMouse();
+            Cursor = System.Windows.Input.Cursors.SizeAll;
+            e.Handled = true;
+            return;
+        }
+
+        if (!GuideEditingEnabled)
+        {
+            return;
+        }
+
         SliceGuideHit hit = HitTestGuide(point);
         if (hit.Kind == SliceGuideHitKind.None)
         {
@@ -267,6 +343,16 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         base.OnMouseMove(e);
         Point point = e.GetPosition(this);
 
+        if (_isPanning && IsMouseCaptured)
+        {
+            Vector delta = point - _lastPanPoint;
+            _lastPanPoint = point;
+            AdjustPreviewPan(delta.X, delta.Y);
+            Cursor = System.Windows.Input.Cursors.SizeAll;
+            e.Handled = true;
+            return;
+        }
+
         if (HasActiveGuide() && IsMouseCaptured)
         {
             UpdateActiveGuides(point, isFinal: false);
@@ -280,6 +366,15 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     protected override void OnMouseUp(System.Windows.Input.MouseButtonEventArgs e)
     {
         base.OnMouseUp(e);
+        if (_isPanning)
+        {
+            _isPanning = false;
+            ReleaseMouseCapture();
+            Cursor = null;
+            e.Handled = true;
+            return;
+        }
+
         if (!HasActiveGuide())
         {
             return;

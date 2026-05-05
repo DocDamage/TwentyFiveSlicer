@@ -531,7 +531,7 @@ public partial class MainWindow : Window
 
     private void ResetZoom_Click(object sender, RoutedEventArgs e)
     {
-        PreviewControl.ResetPreviewZoom();
+        PreviewControl.ResetPreviewView();
     }
 
     private void ZoomIn_Click(object sender, RoutedEventArgs e)
@@ -1122,6 +1122,8 @@ public partial class MainWindow : Window
             TargetWidth = TargetWidthSlider.Value,
             TargetHeight = TargetHeightSlider.Value,
             PreviewZoom = PreviewZoomSlider.Value,
+            PreviewPanX = PreviewControl.PreviewPanX,
+            PreviewPanY = PreviewControl.PreviewPanY,
             KeepAspect = KeepAspectCheckBox.IsChecked == true,
             DebugOverlay = DebuggingViewCheckBox.IsChecked == true,
             ExportDebug = ExportDebugCheckBox.IsChecked == true,
@@ -1155,6 +1157,8 @@ public partial class MainWindow : Window
             _isUpdatingUi = false;
 
             SetTargetSize(session.TargetWidth, session.TargetHeight);
+            PreviewControl.PreviewPanX = session.PreviewPanX;
+            PreviewControl.PreviewPanY = session.PreviewPanY;
 
             if (!string.IsNullOrWhiteSpace(session.AssistantOutput))
             {

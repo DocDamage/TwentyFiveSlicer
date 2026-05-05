@@ -20,6 +20,8 @@ var tests = new (string Name, Action Test)[]
     ("Preview control clamps zoom", PreviewControlClampsZoomValue),
     ("Preview control adjusts zoom from mouse wheel", PreviewControlAdjustsZoomFromMouseWheel),
     ("Preview control resets zoom", PreviewControlResetsZoomValue),
+    ("Preview viewport clamps pan to visible overflow", PreviewViewportClampsPanToVisibleOverflow),
+    ("Preview control resets zoom and pan", PreviewControlResetsZoomAndPan),
     ("SliceGuideInteraction detects intersection before single guides", SliceGuideInteractionDetectsIntersectionBeforeSingleGuides),
     ("SliceGuideInteraction converts point to guide percent", SliceGuideInteractionConvertsPointToGuidePercent),
     ("Slice data JSON stays Unity compatible", SliceDataJsonStaysUnityCompatible),
@@ -259,6 +261,54 @@ static void PreviewControlResetsZoomValue()
         preview.ResetPreviewZoom();
 
         Assert.Equal(1d, preview.PreviewZoom, "Reset should restore 100% preview zoom.");
+    });
+}
+
+static void PreviewViewportClampsPanToVisibleOverflow()
+{
+    var availableRect = new Rect(10d, 20d, 200d, 100d);
+
+    PreviewViewport viewport = PreviewViewportCalculator.Calculate(
+        availableRect,
+        targetWidth: 100d,
+        targetHeight: 50d,
+        previewZoom: 2d,
+        requestedPanX: 150d,
+        requestedPanY: -90d);
+
+    Assert.Equal(100d, viewport.PanX, "Horizontal pan should clamp to half of the zoomed overflow.");
+    Assert.Equal(-50d, viewport.PanY, "Vertical pan should clamp to half of the zoomed overflow.");
+    Assert.Equal(10d, viewport.PreviewRect.X, "Preview rect should include clamped horizontal pan.");
+    Assert.Equal(-80d, viewport.PreviewRect.Y, "Preview rect should include clamped vertical pan.");
+
+    PreviewViewport fittingViewport = PreviewViewportCalculator.Calculate(
+        availableRect,
+        targetWidth: 100d,
+        targetHeight: 50d,
+        previewZoom: 1d,
+        requestedPanX: 40d,
+        requestedPanY: 40d);
+
+    Assert.Equal(0d, fittingViewport.PanX, "Pan should reset on an axis that fits inside the preview area.");
+    Assert.Equal(0d, fittingViewport.PanY, "Pan should reset on an axis that fits inside the preview area.");
+}
+
+static void PreviewControlResetsZoomAndPan()
+{
+    RunOnStaThread(() =>
+    {
+        var preview = new TwentyFiveSlicePreviewControl
+        {
+            PreviewZoom = 1.75d,
+            PreviewPanX = 42d,
+            PreviewPanY = -31d
+        };
+
+        preview.ResetPreviewView();
+
+        Assert.Equal(1d, preview.PreviewZoom, "Reset view should restore 100% preview zoom.");
+        Assert.Equal(0d, preview.PreviewPanX, "Reset view should clear horizontal pan.");
+        Assert.Equal(0d, preview.PreviewPanY, "Reset view should clear vertical pan.");
     });
 }
 
@@ -583,6 +633,8 @@ static void AppStateStoreRoundTripsLastSession()
             TargetWidth = 1024d,
             TargetHeight = 128d,
             PreviewZoom = 1.5d,
+            PreviewPanX = 25d,
+            PreviewPanY = -18d,
             KeepAspect = true,
             DebugOverlay = true,
             ExportDebug = true,
@@ -603,6 +655,8 @@ static void AppStateStoreRoundTripsLastSession()
         Assert.Equal(@"C:\art\button.png", session.ImagePath, "Image path should round trip.");
         Assert.Equal(1024d, session.TargetWidth, "Target width should round trip.");
         Assert.Equal(1.5d, session.PreviewZoom, "Preview zoom should round trip.");
+        Assert.Equal(25d, session.PreviewPanX, "Preview horizontal pan should round trip.");
+        Assert.Equal(-18d, session.PreviewPanY, "Preview vertical pan should round trip.");
         Assert.Equal(true, session.KeepAspect, "Toggle state should round trip.");
         Assert.Equal(88d, session.SliceData.VerticalBorders[3], "Slice data should round trip.");
         Assert.Equal("Best fit: Button", session.AssistantOutput, "Assistant output should round trip.");

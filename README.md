@@ -205,7 +205,7 @@ The desktop app preserves the important behavior from the Unity package:
 - Fixed-region scaling when the output target is smaller than the fixed edge total.
 - Flip X/Y, debug overlay, source guide comparison, and PNG preview export.
 - Direct guide dragging, including intersection handles that move vertical and horizontal guides together.
-- Preview zoom from 50% to 200%, including slider, mouse wheel, quick zoom buttons, and 100% reset.
+- Preview zoom from 50% to 200%, including slider, mouse wheel, quick zoom buttons, zoomed-preview panning, and 100% reset.
 
 ### Desktop Authoring Features
 
@@ -217,6 +217,15 @@ The desktop app preserves the important behavior from the Unity package:
 - Recent file restore and last-session persistence.
 - Built-in presets, user presets, candidate preview/apply workflow, and batch checks across common target sizes.
 - Batch export common preview sizes to a folder.
+
+### Unity JSON Bridge
+
+The Unity package can import and export the same JSON files as the standalone desktop app:
+
+- **Tools → Twenty Five Slicer Tools → Import Slice JSON For Selected Sprite**
+- **Tools → Twenty Five Slicer Tools → Export Slice JSON For Selected Sprite**
+
+Select a Sprite asset, `TwentyFiveSliceImage`, `TwentyFiveSliceSpriteRenderer`, or normal `SpriteRenderer` before using these menu items. Import writes the selected sprite's data into `SliceDataMap`; export writes the saved `SliceDataMap` entry to desktop-compatible JSON.
 
 ### Local And Cloud AI Assistance
 
