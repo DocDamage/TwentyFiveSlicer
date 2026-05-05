@@ -61,7 +61,10 @@ var tests = new (string Name, Action Test)[]
     ("CloudAiAdviceParser extracts JSON border suggestions", CloudAiAdviceParserExtractsJsonBorderSuggestions),
     ("CloudAiAdviceParser extracts inline border suggestions", CloudAiAdviceParserExtractsInlineBorderSuggestions),
     ("CloudAiAdviceParser extracts fenced snake case JSON suggestions", CloudAiAdviceParserExtractsFencedSnakeCaseJsonSuggestions),
-    ("CloudAiAdviceParser extracts spaced percentage labels", CloudAiAdviceParserExtractsSpacedPercentageLabels)
+    ("CloudAiAdviceParser extracts spaced percentage labels", CloudAiAdviceParserExtractsSpacedPercentageLabels),
+    ("IdeAssistantBridge returns discoverable provider JSON", IdeAssistantBridgeReturnsDiscoverableProviderJson),
+    ("IdeAssistantBridge returns local analysis JSON", IdeAssistantBridgeReturnsLocalAnalysisJson),
+    ("IdeAssistantBridge applies prompt as JSON", IdeAssistantBridgeAppliesPromptAsJson)
 };
 
 int failures = 0;
@@ -999,6 +1002,58 @@ static void CloudAiAdviceParserExtractsSpacedPercentageLabels()
     Assert.True(CloudAiAdviceParser.TryParseSliceData(advice, out TwentyFiveSliceData? data), "Parser should extract spaced labels with percentage values.");
     Assert.SequenceEqual(new[] { 7d, 34d, 66d, 93d }, data!.VerticalBorders);
     Assert.SequenceEqual(new[] { 15d, 45d, 55d, 85d }, data.HorizontalBorders);
+}
+
+static void IdeAssistantBridgeReturnsDiscoverableProviderJson()
+{
+    string json = IdeAssistantBridge.ListProvidersJson();
+    using JsonDocument document = JsonDocument.Parse(json);
+    JsonElement root = document.RootElement;
+
+    Assert.Equal("twenty-five-slicer.ai.providers.v1", root.GetProperty("schema").GetString(), "Provider output should expose a stable schema name.");
+    JsonElement providers = root.GetProperty("providers");
+    Assert.True(providers.GetArrayLength() >= 8, "IDE provider output should include common cloud providers.");
+    Assert.True(providers.EnumerateArray().Any(provider => provider.GetProperty("id").GetString() == "openai"), "Provider output should include OpenAI.");
+    Assert.True(providers.EnumerateArray().Any(provider => provider.GetProperty("aliases").EnumerateArray().Any(alias => alias.GetString() == "chatgpt")), "Provider aliases should be discoverable.");
+}
+
+static void IdeAssistantBridgeReturnsLocalAnalysisJson()
+{
+    var input = new IdeAssistantInput(
+        new TwentyFiveSliceData([35d, 45d, 55d, 65d], [20d, 40d, 60d, 80d]),
+        SourceWidth: 1000d,
+        SourceHeight: 400d,
+        TargetWidth: 200d,
+        TargetHeight: 300d);
+
+    string json = IdeAssistantBridge.AnalyzeLocalJson(input);
+    using JsonDocument document = JsonDocument.Parse(json);
+    JsonElement root = document.RootElement;
+
+    Assert.Equal("twenty-five-slicer.ai.analysis.v1", root.GetProperty("schema").GetString(), "Analysis output should expose a stable schema name.");
+    Assert.True(root.GetProperty("observations").GetArrayLength() > 0, "Analysis output should include observations.");
+    Assert.True(root.GetProperty("validationMessages").GetArrayLength() > 0, "Analysis output should include validation messages.");
+    Assert.True(root.GetProperty("recommendedActions").GetArrayLength() > 0, "Analysis output should include recommended actions.");
+}
+
+static void IdeAssistantBridgeAppliesPromptAsJson()
+{
+    var input = new IdeAssistantInput(
+        TwentyFiveSliceData.CreateDefault(),
+        SourceWidth: 100d,
+        SourceHeight: 100d,
+        TargetWidth: 320d,
+        TargetHeight: 96d);
+
+    string json = IdeAssistantBridge.ApplyPromptJson(input, "make this a button");
+    using JsonDocument document = JsonDocument.Parse(json);
+    JsonElement root = document.RootElement;
+
+    Assert.Equal("twenty-five-slicer.ai.apply.v1", root.GetProperty("schema").GetString(), "Apply output should expose a stable schema name.");
+    Assert.True(root.GetProperty("applied").GetBoolean(), "Known prompts should be applied.");
+    JsonElement sliceData = root.GetProperty("sliceData");
+    Assert.Equal(10d, sliceData.GetProperty("verticalBorders")[0].GetDouble(), "Apply output should include Unity-compatible vertical borders.");
+    Assert.Equal(90d, sliceData.GetProperty("verticalBorders")[3].GetDouble(), "Apply output should include Unity-compatible vertical borders.");
 }
 
 static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int left, int right, int top, int bottom)

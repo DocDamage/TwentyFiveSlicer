@@ -246,6 +246,19 @@ Cloud AI features:
 - If a cloud model returns exact `verticalBorders` and `horizontalBorders`, the app parses and applies them automatically.
 - Supported provider presets include OpenAI / ChatGPT, Anthropic Claude, Google Gemini, Moonshot Kimi, DeepSeek, Zhipu GLM, MiniMax, Mistral, Cohere, Groq, xAI Grok, Perplexity, and custom OpenAI-compatible endpoints.
 
+### IDE / Codex AI CLI
+
+IDE agents can use the same AI helpers without the WPF UI through `DesktopApp/TwentyFiveSlicer.AiCli`. It writes JSON to stdout for easy parsing.
+
+```powershell
+dotnet run --project .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj -- providers
+dotnet run --project .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj -- analyze --slice .\button.25slice.json --source-width 256 --source-height 128 --target-width 640 --target-height 160
+dotnet run --project .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj -- apply --slice .\button.25slice.json --prompt "make this a button"
+dotnet run --project .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj -- cloud --slice .\button.25slice.json --provider openai --prompt "recommend safer borders"
+```
+
+The `cloud` command supports `--model`, `--endpoint`, `--api-key-env`, and `--image`. API keys still come from environment variables.
+
 Common API key environment variables:
 
 ```powershell
@@ -275,19 +288,22 @@ Build the desktop app:
 
 ```powershell
 dotnet build .\DesktopApp\TwentyFiveSlicer.Desktop\TwentyFiveSlicer.Desktop.csproj
+dotnet build .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj
 ```
 
 ### Publish A Standalone Exe
 
 ```powershell
 dotnet publish .\DesktopApp\TwentyFiveSlicer.Desktop\TwentyFiveSlicer.Desktop.csproj -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true
+dotnet publish .\DesktopApp\TwentyFiveSlicer.AiCli\TwentyFiveSlicer.AiCli.csproj -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true
 ```
 
 Published output:
 
 - `DesktopApp/TwentyFiveSlicer.Desktop/bin/Release/net8.0-windows/win-x64/publish/TwentyFiveSlicer.Desktop.exe`
+- `DesktopApp/TwentyFiveSlicer.AiCli/bin/Release/net8.0-windows/win-x64/publish/TwentyFiveSlicer.AiCli.exe`
 
-The published exe is self-contained for Windows x64 and does not require a Unity project.
+The published executables are self-contained for Windows x64 and do not require a Unity project.
 
 ---
 
