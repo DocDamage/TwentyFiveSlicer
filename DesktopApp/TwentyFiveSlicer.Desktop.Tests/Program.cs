@@ -75,6 +75,7 @@ var tests = new (string Name, Action Test)[]
     ("SliceSuggestionReview blocks image padding mismatch", SliceSuggestionReviewBlocksImagePaddingMismatch),
     ("SliceChatService creates reviewed suggestion", SliceChatServiceCreatesReviewedSuggestion),
     ("SliceChatService creates reviewed cloud suggestion", SliceChatServiceCreatesReviewedCloudSuggestion),
+    ("SliceChatService recognizes proposal commands", SliceChatServiceRecognizesProposalCommands),
     ("SliceChatService answers analysis without proposal", SliceChatServiceAnswersAnalysisWithoutProposal)
 };
 
@@ -1254,6 +1255,16 @@ static void SliceChatServiceCreatesReviewedCloudSuggestion()
     Assert.True(response.ProposedSliceData is not null, "Cloud advice with border JSON should return a proposed slice.");
     Assert.True(response.Review?.SafeToApply == true, "Cloud proposals should include deterministic review.");
     Assert.True(response.AssistantMessage.Contains("OpenAI", StringComparison.OrdinalIgnoreCase), "Cloud chat response should name the provider.");
+}
+
+static void SliceChatServiceRecognizesProposalCommands()
+{
+    Assert.Equal(SliceChatCommand.PreviewProposal, SliceChatService.ParseCommand("preview it"), "Chat should recognize preview command.");
+    Assert.Equal(SliceChatCommand.ApplyProposal, SliceChatService.ParseCommand("apply that suggestion"), "Chat should recognize apply command.");
+    Assert.Equal(SliceChatCommand.RejectProposal, SliceChatService.ParseCommand("reject it"), "Chat should recognize reject command.");
+    Assert.Equal(SliceChatCommand.ExplainRisk, SliceChatService.ParseCommand("explain the risk"), "Chat should recognize risk explanation command.");
+    Assert.Equal(SliceChatCommand.TrySaferProposal, SliceChatService.ParseCommand("try a safer version"), "Chat should recognize safer retry command.");
+    Assert.Equal(SliceChatCommand.None, SliceChatService.ParseCommand("make this a button"), "Normal prompts should not be treated as proposal commands.");
 }
 
 static void SliceChatServiceAnswersAnalysisWithoutProposal()

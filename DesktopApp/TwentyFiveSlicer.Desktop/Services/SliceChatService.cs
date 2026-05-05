@@ -7,6 +7,50 @@ public sealed class SliceChatService
 {
     private readonly SliceAssistantService _assistant = new();
 
+    public static SliceChatCommand ParseCommand(string userMessage)
+    {
+        string normalized = userMessage.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return SliceChatCommand.None;
+        }
+
+        if ((normalized.Contains("preview", StringComparison.Ordinal) || normalized.Contains("show", StringComparison.Ordinal)) &&
+            (normalized.Contains("it", StringComparison.Ordinal) || normalized.Contains("proposal", StringComparison.Ordinal) || normalized.Contains("suggestion", StringComparison.Ordinal)))
+        {
+            return SliceChatCommand.PreviewProposal;
+        }
+
+        if ((normalized.Contains("apply", StringComparison.Ordinal) || normalized.Contains("accept", StringComparison.Ordinal) || normalized.Contains("use it", StringComparison.Ordinal)) &&
+            (normalized.Contains("it", StringComparison.Ordinal) || normalized.Contains("proposal", StringComparison.Ordinal) || normalized.Contains("suggestion", StringComparison.Ordinal) || normalized.Contains("that", StringComparison.Ordinal)))
+        {
+            return SliceChatCommand.ApplyProposal;
+        }
+
+        if (normalized.Contains("reject", StringComparison.Ordinal) ||
+            normalized.Contains("discard", StringComparison.Ordinal) ||
+            normalized.Contains("cancel", StringComparison.Ordinal))
+        {
+            return SliceChatCommand.RejectProposal;
+        }
+
+        if (normalized.Contains("risk", StringComparison.Ordinal) ||
+            normalized.Contains("why", StringComparison.Ordinal) ||
+            normalized.Contains("explain", StringComparison.Ordinal))
+        {
+            return SliceChatCommand.ExplainRisk;
+        }
+
+        if (normalized.Contains("safer", StringComparison.Ordinal) ||
+            normalized.Contains("less risky", StringComparison.Ordinal) ||
+            normalized.Contains("safer version", StringComparison.Ordinal))
+        {
+            return SliceChatCommand.TrySaferProposal;
+        }
+
+        return SliceChatCommand.None;
+    }
+
     public SliceChatResponse Send(string userMessage, SliceChatContext context)
     {
         string prompt = userMessage.Trim();

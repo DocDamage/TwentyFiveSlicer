@@ -1078,6 +1078,13 @@ public partial class MainWindow : Window
         }
 
         AddChatMessage($"You: {message}");
+        if (HandleChatCommand(SliceChatService.ParseCommand(message)))
+        {
+            ChatInputBox.Text = string.Empty;
+            SaveAppState();
+            return;
+        }
+
         SliceChatContext context = CreateChatContext();
         SliceChatResponse response = await SendChatToSelectedAssistantAsync(message, context);
         _pendingChatProposal = response.ProposedSliceData;
@@ -1093,6 +1100,71 @@ public partial class MainWindow : Window
         AssistantResultText.Text = response.AssistantMessage;
         ChatInputBox.Text = string.Empty;
         SaveAppState();
+    }
+
+    private bool HandleChatCommand(SliceChatCommand command)
+    {
+        switch (command)
+        {
+            case SliceChatCommand.PreviewProposal:
+                PreviewChatProposal_Click(this, new RoutedEventArgs());
+                return true;
+            case SliceChatCommand.ApplyProposal:
+                ApplyChatProposal_Click(this, new RoutedEventArgs());
+                return true;
+            case SliceChatCommand.RejectProposal:
+                RejectChatProposal_Click(this, new RoutedEventArgs());
+                return true;
+            case SliceChatCommand.ExplainRisk:
+                AddChatMessage(_pendingChatReview is null
+                    ? "Assistant: There is no pending reviewed proposal to explain."
+                    : $"Assistant: {FormatSuggestionReview(_pendingChatReview)}");
+                return true;
+            case SliceChatCommand.TrySaferProposal:
+                TrySaferChatProposal();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private void TrySaferChatProposal()
+    {
+        if (_sourceImage is null)
+        {
+            AddChatMessage("Assistant: Load an image first so I can check a safer version against the actual asset.");
+            return;
+        }
+
+        IReadOnlyList<SliceCandidateSuggestion> candidates = _assistant.RecommendCandidates(
+            _sourceImage.PixelWidth,
+            _sourceImage.PixelHeight,
+            TargetWidthSlider.Value,
+            TargetHeightSlider.Value,
+            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+
+        foreach (SliceCandidateSuggestion candidate in candidates)
+        {
+            SliceSuggestionReview review = SliceSuggestionReviewService.Review(
+                new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+                candidate.SliceData,
+                _sourceImage,
+                TargetWidthSlider.Value,
+                TargetHeightSlider.Value);
+            if (!review.SafeToApply)
+            {
+                continue;
+            }
+
+            _pendingChatProposal = candidate.SliceData;
+            _pendingChatReview = review;
+            _chatPreviewReturnState = null;
+            AddChatMessage($"Assistant: I found a safer proposal: {candidate.Name}. Score: {review.Score:P0}.");
+            AddChatMessage($"Review: {FormatSuggestionReview(review)}");
+            return;
+        }
+
+        AddChatMessage("Assistant: I could not find a safer proposal that passed deterministic review for this target.");
     }
 
     private async Task<SliceChatResponse> SendChatToSelectedAssistantAsync(string message, SliceChatContext context)
