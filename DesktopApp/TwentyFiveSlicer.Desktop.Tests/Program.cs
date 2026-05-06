@@ -27,6 +27,7 @@ var tests = new (string Name, Action Test)[]
     ("Preview control clamps zoom", PreviewControlClampsZoomValue),
     ("Preview control adjusts zoom from mouse wheel", PreviewControlAdjustsZoomFromMouseWheel),
     ("Preview control resets zoom", PreviewControlResetsZoomValue),
+    ("Preview control accepts variable guide selection", PreviewControlAcceptsVariableGuideSelection),
     ("Preview viewport clamps pan to visible overflow", PreviewViewportClampsPanToVisibleOverflow),
     ("Preview control resets zoom and pan", PreviewControlResetsZoomAndPan),
     ("SliceGuideInteraction detects intersection before single guides", SliceGuideInteractionDetectsIntersectionBeforeSingleGuides),
@@ -475,6 +476,11 @@ static void MainWindowExposesVariableGridControls()
     Assert.True(xaml.Contains("x:Name=\"SelectedGuideText\"", StringComparison.Ordinal), "Main window should show selected guide position and cursor state.");
     Assert.True(xaml.Contains("GuideSelectionChanged=\"PreviewControl_GuideSelectionChanged\"", StringComparison.Ordinal), "Preview should report guide selection to the variable-grid panel.");
     Assert.True(xaml.Contains("GuidePointerChanged=\"PreviewControl_GuidePointerChanged\"", StringComparison.Ordinal), "Preview should report cursor percentages for add-at-cursor guide creation.");
+    Assert.True(xaml.Contains("x:Name=\"XGuideComboBox\"", StringComparison.Ordinal), "Main window should expose a dynamic X guide list.");
+    Assert.True(xaml.Contains("x:Name=\"YGuideComboBox\"", StringComparison.Ordinal), "Main window should expose a dynamic Y guide list.");
+    Assert.True(xaml.Contains("x:Name=\"XGuidePercentBox\"", StringComparison.Ordinal), "Main window should let users edit any selected X guide percentage.");
+    Assert.True(xaml.Contains("x:Name=\"YGuidePercentBox\"", StringComparison.Ordinal), "Main window should let users edit any selected Y guide percentage.");
+    Assert.True(xaml.Contains("Click=\"ApplyGuidePercent_Click\"", StringComparison.Ordinal), "Main window should commit dynamic guide percentage edits.");
 }
 
 static void MainWindowConstructsWithoutStartupEventCrash()
@@ -788,6 +794,21 @@ static void PreviewControlResetsZoomValue()
         preview.ResetPreviewZoom();
 
         Assert.Equal(1d, preview.PreviewZoom, "Reset should restore 100% preview zoom.");
+    });
+}
+
+static void PreviewControlAcceptsVariableGuideSelection()
+{
+    RunOnStaThread(() =>
+    {
+        var preview = new TwentyFiveSlicePreviewControl
+        {
+            SliceData = new TwentyFiveSliceData([10d, 20d, 30d, 40d, 50d, 60d], [15d, 30d, 45d, 60d, 75d])
+        };
+
+        preview.SelectGuide(isVertical: true, index: 5);
+        preview.SelectGuide(isVertical: false, index: 4);
+        preview.SelectGuide(isVertical: true, index: 99);
     });
 }
 

@@ -638,6 +638,7 @@ public partial class MainWindow : Window
             _selectedYGuideIndex = -1;
             ApplyBorderStateToUi();
             UpdatePreview();
+            PreviewControl.SelectGuide(isVertical: true, _selectedXGuideIndex);
             RememberCurrentState();
         }
     }
@@ -650,6 +651,7 @@ public partial class MainWindow : Window
             _selectedXGuideIndex = -1;
             ApplyBorderStateToUi();
             UpdatePreview();
+            PreviewControl.SelectGuide(isVertical: false, _selectedYGuideIndex);
             RememberCurrentState();
         }
     }
@@ -661,6 +663,7 @@ public partial class MainWindow : Window
             _selectedXGuideIndex = Math.Min(_selectedXGuideIndex, _verticalBorders.Length - 1);
             ApplyBorderStateToUi();
             UpdatePreview();
+            PreviewControl.SelectGuide(isVertical: true, _selectedXGuideIndex);
             RememberCurrentState();
         }
     }
@@ -672,6 +675,7 @@ public partial class MainWindow : Window
             _selectedYGuideIndex = Math.Min(_selectedYGuideIndex, _horizontalBorders.Length - 1);
             ApplyBorderStateToUi();
             UpdatePreview();
+            PreviewControl.SelectGuide(isVertical: false, _selectedYGuideIndex);
             RememberCurrentState();
         }
     }
@@ -684,6 +688,51 @@ public partial class MainWindow : Window
         }
 
         SyncSelectedSegmentModeControls();
+    }
+
+    private void GuideComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi || sender is not ComboBox comboBox)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(comboBox, XGuideComboBox) && comboBox.SelectedIndex >= 0)
+        {
+            SelectGuideFromSidebar(isVertical: true, comboBox.SelectedIndex);
+        }
+        else if (ReferenceEquals(comboBox, YGuideComboBox) && comboBox.SelectedIndex >= 0)
+        {
+            SelectGuideFromSidebar(isVertical: false, comboBox.SelectedIndex);
+        }
+    }
+
+    private void ApplyGuidePercent_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.Tag is string axis)
+        {
+            ApplyGuidePercent(axis);
+        }
+    }
+
+    private void GuidePercentBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(sender, XGuidePercentBox))
+        {
+            ApplyGuidePercent("X");
+        }
+        else if (ReferenceEquals(sender, YGuidePercentBox))
+        {
+            ApplyGuidePercent("Y");
+        }
+
+        Keyboard.ClearFocus();
+        e.Handled = true;
     }
 
     private void SegmentModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -868,6 +917,7 @@ public partial class MainWindow : Window
         }
 
         UpdateSelectedGuideText();
+        RefreshGuideControls();
     }
 
     private void PreviewControl_GuidePointerChanged(object? sender, SliceGuidePointerEventArgs e)
@@ -1062,6 +1112,7 @@ public partial class MainWindow : Window
         _isUpdatingUi = true;
         GridSizeText.Text = $"{_verticalBorders.Length + 1} x {_horizontalBorders.Length + 1} cells ({_verticalBorders.Length} X guides, {_horizontalBorders.Length} Y guides)";
         UpdateSelectedGuideText();
+        RefreshGuideControls();
         RefreshSegmentControls();
 
         for (int index = 0; index < _verticalSliders.Length; index++)
@@ -1125,6 +1176,7 @@ public partial class MainWindow : Window
 
     private void SyncSelectedSegmentModeControls()
     {
+        bool wasUpdating = _isUpdatingUi;
         _isUpdatingUi = true;
         try
         {
@@ -1137,8 +1189,50 @@ public partial class MainWindow : Window
         }
         finally
         {
-            _isUpdatingUi = false;
+            _isUpdatingUi = wasUpdating;
         }
+    }
+
+    private void RefreshGuideControls()
+    {
+        bool wasUpdating = _isUpdatingUi;
+        _isUpdatingUi = true;
+        try
+        {
+            int selectedX = _selectedXGuideIndex >= 0 && _selectedXGuideIndex < _verticalBorders.Length ? _selectedXGuideIndex : -1;
+            int selectedY = _selectedYGuideIndex >= 0 && _selectedYGuideIndex < _horizontalBorders.Length ? _selectedYGuideIndex : -1;
+
+            XGuideComboBox.ItemsSource = BuildGuideLabels("X", _verticalBorders, _sourceImage?.PixelWidth);
+            YGuideComboBox.ItemsSource = BuildGuideLabels("Y", _horizontalBorders, _sourceImage?.PixelHeight);
+            XGuideComboBox.SelectedIndex = selectedX;
+            YGuideComboBox.SelectedIndex = selectedY;
+            XGuidePercentBox.Text = selectedX >= 0 ? $"{_verticalBorders[selectedX]:0.##}" : string.Empty;
+            YGuidePercentBox.Text = selectedY >= 0 ? $"{_horizontalBorders[selectedY]:0.##}" : string.Empty;
+            XGuidePercentBox.IsEnabled = selectedX >= 0;
+            YGuidePercentBox.IsEnabled = selectedY >= 0;
+        }
+        finally
+        {
+            _isUpdatingUi = wasUpdating;
+        }
+    }
+
+    private void SelectGuideFromSidebar(bool isVertical, int index)
+    {
+        if (isVertical)
+        {
+            _selectedXGuideIndex = index;
+            _selectedYGuideIndex = -1;
+        }
+        else
+        {
+            _selectedYGuideIndex = index;
+            _selectedXGuideIndex = -1;
+        }
+
+        PreviewControl.SelectGuide(isVertical, index);
+        UpdateSelectedGuideText();
+        RefreshGuideControls();
     }
 
     private void UpdateSelectedGuideText()
@@ -1150,7 +1244,7 @@ public partial class MainWindow : Window
 
         string cursorText = _lastPreviewXPercent.HasValue && _lastPreviewYPercent.HasValue
             ? $"Cursor {_lastPreviewXPercent.Value:0.#}% X, {_lastPreviewYPercent.Value:0.#}% Y"
-            : "Move over the preview to add guides at the cursor";
+            : "Cursor unavailable";
 
         if (_selectedXGuideIndex >= 0 && _selectedXGuideIndex < _verticalBorders.Length)
         {
@@ -1168,7 +1262,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        SelectedGuideText.Text = $"{cursorText}. Click a guide to select it, then remove that exact guide.";
+        SelectedGuideText.Text = $"{cursorText}. No guide selected.";
     }
 
     private void UpdatePreview()
@@ -1290,6 +1384,48 @@ public partial class MainWindow : Window
         NormalizeBorders(borders);
         ApplyBorderStateToUi();
         UpdatePreview();
+        RememberCurrentState();
+    }
+
+    private void ApplyGuidePercent(string axis)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        bool isVertical = axis.Equals("X", StringComparison.OrdinalIgnoreCase);
+        int selectedIndex = isVertical ? _selectedXGuideIndex : _selectedYGuideIndex;
+        double[] borders = isVertical ? _verticalBorders : _horizontalBorders;
+        TextBox textBox = isVertical ? XGuidePercentBox : YGuidePercentBox;
+        if (selectedIndex < 0 || selectedIndex >= borders.Length || !double.TryParse(textBox.Text, out double value))
+        {
+            ApplyBorderStateToUi();
+            return;
+        }
+
+        value = Math.Clamp(value, 0.01d, 99.99d);
+        double[] updated = (double[])borders.Clone();
+        updated[selectedIndex] = value;
+        double[] normalized = TwentyFiveSliceData.NormalizeAxis(updated);
+        int newSelectedIndex = FindNearestGuideIndex(normalized, value);
+
+        if (isVertical)
+        {
+            _verticalBorders = normalized;
+            _selectedXGuideIndex = newSelectedIndex;
+            _selectedYGuideIndex = -1;
+        }
+        else
+        {
+            _horizontalBorders = normalized;
+            _selectedYGuideIndex = newSelectedIndex;
+            _selectedXGuideIndex = -1;
+        }
+
+        ApplyBorderStateToUi();
+        UpdatePreview();
+        PreviewControl.SelectGuide(isVertical, newSelectedIndex);
         RememberCurrentState();
     }
 
@@ -1932,6 +2068,18 @@ public partial class MainWindow : Window
         for (int index = 0; index < labels.Length; index++)
         {
             labels[index] = $"{axis}{index}: {stops[index]:0.#}% - {stops[index + 1]:0.#}%";
+        }
+
+        return labels;
+    }
+
+    private static string[] BuildGuideLabels(string axis, IReadOnlyList<double> guides, int? sourcePixels)
+    {
+        var labels = new string[guides.Count];
+        for (int index = 0; index < labels.Length; index++)
+        {
+            string pixelText = sourcePixels.HasValue ? $" / {(sourcePixels.Value * guides[index] / 100d):0}px" : string.Empty;
+            labels[index] = $"{axis}{index + 1}: {guides[index]:0.##}%{pixelText}";
         }
 
         return labels;

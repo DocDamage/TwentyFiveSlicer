@@ -583,13 +583,59 @@
                                            Margin="0,0,0,10"
                                            Foreground="{StaticResource MutedTextBrush}"
                                            TextWrapping="Wrap"
-                                           Text="Move over the preview to add guides at the cursor. Click a guide to select it." />
+                                           Text="No guide selected." />
                                 <UniformGrid Columns="2">
                                     <Button Content="Add X Guide" Style="{StaticResource ActionButtonStyle}" Click="AddXGuide_Click" />
                                     <Button Content="Add Y Guide" Style="{StaticResource ActionButtonStyle}" Click="AddYGuide_Click" />
                                     <Button Content="Remove X Guide" Style="{StaticResource ActionButtonStyle}" Click="RemoveXGuide_Click" />
                                     <Button Content="Remove Y Guide" Style="{StaticResource ActionButtonStyle}" Click="RemoveYGuide_Click" />
                                 </UniformGrid>
+                                <TextBlock Text="X guides"
+                                           Style="{StaticResource LabelStyle}"
+                                           Margin="0,8,0,6" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="74" />
+                                        <ColumnDefinition Width="96" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox x:Name="XGuideComboBox"
+                                              Grid.Column="0"
+                                              Margin="0,0,8,8"
+                                              SelectionChanged="GuideComboBox_SelectionChanged" />
+                                    <TextBox x:Name="XGuidePercentBox"
+                                             Grid.Column="1"
+                                             Margin="0,0,8,8"
+                                             KeyDown="GuidePercentBox_KeyDown" />
+                                    <Button Grid.Column="2"
+                                            Content="Set X"
+                                            Tag="X"
+                                            Style="{StaticResource ActionButtonStyle}"
+                                            Click="ApplyGuidePercent_Click" />
+                                </Grid>
+                                <TextBlock Text="Y guides"
+                                           Style="{StaticResource LabelStyle}"
+                                           Margin="0,0,0,6" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="74" />
+                                        <ColumnDefinition Width="96" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox x:Name="YGuideComboBox"
+                                              Grid.Column="0"
+                                              Margin="0,0,8,8"
+                                              SelectionChanged="GuideComboBox_SelectionChanged" />
+                                    <TextBox x:Name="YGuidePercentBox"
+                                             Grid.Column="1"
+                                             Margin="0,0,8,8"
+                                             KeyDown="GuidePercentBox_KeyDown" />
+                                    <Button Grid.Column="2"
+                                            Content="Set Y"
+                                            Tag="Y"
+                                            Style="{StaticResource ActionButtonStyle}"
+                                            Click="ApplyGuidePercent_Click" />
+                                </Grid>
                                 <TextBlock Text="X segment"
                                            Style="{StaticResource LabelStyle}"
                                            Margin="0,8,0,6" />
@@ -615,7 +661,7 @@
                                 <TextBlock Margin="0,6,0,0"
                                            Foreground="{StaticResource MutedTextBrush}"
                                            TextWrapping="Wrap"
-                                           Text="Additional guides render in the preview and save to schema v2. The first four remain available in the detailed controls below." />
+                                           Text="Schema v2 guide arrays save with fixed, stretch, and hidden segment modes." />
                             </StackPanel>
                         </controls:SliceSkinPanel>
 

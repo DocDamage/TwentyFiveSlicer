@@ -172,6 +172,15 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         }
     }
 
+    public void SelectGuide(bool isVertical, int index)
+    {
+        int maxIndex = isVertical ? SliceData.VerticalBorders.Length - 1 : SliceData.HorizontalBorders.Length - 1;
+        int selectedIndex = index >= 0 && index <= maxIndex ? index : -1;
+        _selectedVerticalGuideIndex = isVertical ? selectedIndex : -1;
+        _selectedHorizontalGuideIndex = isVertical ? -1 : selectedIndex;
+        InvalidateVisual();
+    }
+
     public void AdjustZoomFromMouseWheel(int wheelDelta)
     {
         PreviewZoom += (wheelDelta / 120d) * 0.05d;
