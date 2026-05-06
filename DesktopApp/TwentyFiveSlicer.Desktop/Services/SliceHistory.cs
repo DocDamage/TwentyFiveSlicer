@@ -65,6 +65,18 @@ public sealed class SliceHistory
         return Math.Abs(left.TargetWidth - right.TargetWidth) < 0.01d &&
             Math.Abs(left.TargetHeight - right.TargetHeight) < 0.01d &&
             left.VerticalBorders.SequenceEqual(right.VerticalBorders) &&
-            left.HorizontalBorders.SequenceEqual(right.HorizontalBorders);
+            left.HorizontalBorders.SequenceEqual(right.HorizontalBorders) &&
+            SegmentModesEqual(left.XSegments, right.XSegments) &&
+            SegmentModesEqual(left.YSegments, right.YSegments);
+    }
+
+    private static bool SegmentModesEqual(IReadOnlyList<SliceSegmentDefinition>? left, IReadOnlyList<SliceSegmentDefinition>? right)
+    {
+        if (left is null || right is null)
+        {
+            return left is null && right is null;
+        }
+
+        return left.Select(segment => segment.Mode).SequenceEqual(right.Select(segment => segment.Mode));
     }
 }

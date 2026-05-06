@@ -25,16 +25,30 @@ public static partial class CloudAiAdviceParser
         int start = advice.IndexOf('{');
         while (start >= 0)
         {
-            int end = advice.IndexOf('}', start + 1);
-            while (end > start)
+            int depth = 0;
+            for (int index = start; index < advice.Length; index++)
             {
-                string candidate = advice[start..(end + 1)];
-                if (TryParseJsonObject(candidate, out data))
+                if (advice[index] == '{')
                 {
-                    return true;
+                    depth++;
                 }
 
-                end = advice.IndexOf('}', end + 1);
+                if (advice[index] != '}')
+                {
+                    continue;
+                }
+
+                depth--;
+                if (depth == 0)
+                {
+                    string candidate = advice[start..(index + 1)];
+                    if (TryParseJsonObject(candidate, out data))
+                    {
+                        return true;
+                    }
+
+                    break;
+                }
             }
 
             start = advice.IndexOf('{', start + 1);
@@ -50,8 +64,17 @@ public static partial class CloudAiAdviceParser
         {
             using JsonDocument document = JsonDocument.Parse(json);
             JsonElement root = document.RootElement;
-            if (!TryReadArray(root, ["verticalBorders", "vertical_borders", "vertical borders"], out double[]? vertical) ||
-                !TryReadArray(root, ["horizontalBorders", "horizontal_borders", "horizontal borders"], out double[]? horizontal))
+            if (TryReadArray(root, ["xGuidesPercent", "x_guides_percent", "x guides percent"], minimumCount: 1, maximumCount: null, out double[]? xGuides) &&
+                TryReadArray(root, ["yGuidesPercent", "y_guides_percent", "y guides percent"], minimumCount: 1, maximumCount: null, out double[]? yGuides))
+            {
+                SliceSegmentDefinition[]? xSegments = TryReadSegments(root, ["xSegments", "x_segments", "x segments"]);
+                SliceSegmentDefinition[]? ySegments = TryReadSegments(root, ["ySegments", "y_segments", "y segments"]);
+                data = new TwentyFiveSliceData(xGuides, yGuides, xSegments, ySegments);
+                return true;
+            }
+
+            if (!TryReadArray(root, ["verticalBorders", "vertical_borders", "vertical borders"], minimumCount: 4, maximumCount: 4, out double[]? vertical) ||
+                !TryReadArray(root, ["horizontalBorders", "horizontal_borders", "horizontal borders"], minimumCount: 4, maximumCount: 4, out double[]? horizontal))
             {
                 return false;
             }
@@ -85,7 +108,7 @@ public static partial class CloudAiAdviceParser
         return true;
     }
 
-    private static bool TryReadArray(JsonElement root, string[] propertyNames, out double[]? values)
+    private static bool TryReadArray(JsonElement root, string[] propertyNames, int minimumCount, int? maximumCount, out double[]? values)
     {
         values = null;
         JsonElement array = default;
@@ -100,13 +123,16 @@ public static partial class CloudAiAdviceParser
             }
         }
 
-        if (!found || array.ValueKind != JsonValueKind.Array || array.GetArrayLength() < 4)
+        if (!found || array.ValueKind != JsonValueKind.Array || array.GetArrayLength() < minimumCount)
         {
             return false;
         }
 
         var parsed = new List<double>();
-        foreach (JsonElement item in array.EnumerateArray().Take(4))
+        IEnumerable<JsonElement> items = maximumCount is int max
+            ? array.EnumerateArray().Take(max)
+            : array.EnumerateArray();
+        foreach (JsonElement item in items)
         {
             if (!TryReadNumber(item, out double value))
             {
@@ -117,7 +143,48 @@ public static partial class CloudAiAdviceParser
         }
 
         values = parsed.ToArray();
-        return values.Length == 4;
+        return values.Length >= minimumCount;
+    }
+
+    private static SliceSegmentDefinition[]? TryReadSegments(JsonElement root, string[] propertyNames)
+    {
+        JsonElement array = default;
+        bool found = false;
+        foreach (JsonProperty property in root.EnumerateObject())
+        {
+            if (propertyNames.Any(name => string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                array = property.Value;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found || array.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var segments = new List<SliceSegmentDefinition>();
+        foreach (JsonElement item in array.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.Object &&
+                item.TryGetProperty("mode", out JsonElement modeElement) &&
+                modeElement.ValueKind == JsonValueKind.String &&
+                Enum.TryParse(modeElement.GetString(), ignoreCase: true, out SliceSegmentMode mode))
+            {
+                segments.Add(new SliceSegmentDefinition(mode));
+                continue;
+            }
+
+            if (item.ValueKind == JsonValueKind.String &&
+                Enum.TryParse(item.GetString(), ignoreCase: true, out mode))
+            {
+                segments.Add(new SliceSegmentDefinition(mode));
+            }
+        }
+
+        return segments.Count == 0 ? null : segments.ToArray();
     }
 
     private static bool TryReadNumber(JsonElement element, out double value)

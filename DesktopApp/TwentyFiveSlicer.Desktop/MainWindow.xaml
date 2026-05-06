@@ -570,6 +570,52 @@
 
                         <controls:SliceSkinPanel Style="{StaticResource SkinnedCardStyle}">
                             <StackPanel>
+                                <TextBlock Text="Variable Grid"
+                                           Foreground="{StaticResource TextBrush}"
+                                           FontSize="18"
+                                           FontWeight="SemiBold" />
+                                <TextBlock x:Name="GridSizeText"
+                                           Margin="0,8,0,10"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="5 x 5 cells" />
+                                <UniformGrid Columns="2">
+                                    <Button Content="Add X Guide" Style="{StaticResource ActionButtonStyle}" Click="AddXGuide_Click" />
+                                    <Button Content="Add Y Guide" Style="{StaticResource ActionButtonStyle}" Click="AddYGuide_Click" />
+                                    <Button Content="Remove X Guide" Style="{StaticResource ActionButtonStyle}" Click="RemoveXGuide_Click" />
+                                    <Button Content="Remove Y Guide" Style="{StaticResource ActionButtonStyle}" Click="RemoveYGuide_Click" />
+                                </UniformGrid>
+                                <TextBlock Text="X segment"
+                                           Style="{StaticResource LabelStyle}"
+                                           Margin="0,8,0,6" />
+                                <UniformGrid Columns="2">
+                                    <ComboBox x:Name="XSegmentComboBox"
+                                              Margin="0,0,8,8"
+                                              SelectionChanged="SegmentComboBox_SelectionChanged" />
+                                    <ComboBox x:Name="XSegmentModeComboBox"
+                                              Margin="0,0,0,8"
+                                              SelectionChanged="SegmentModeComboBox_SelectionChanged" />
+                                </UniformGrid>
+                                <TextBlock Text="Y segment"
+                                           Style="{StaticResource LabelStyle}"
+                                           Margin="0,4,0,6" />
+                                <UniformGrid Columns="2">
+                                    <ComboBox x:Name="YSegmentComboBox"
+                                              Margin="0,0,8,8"
+                                              SelectionChanged="SegmentComboBox_SelectionChanged" />
+                                    <ComboBox x:Name="YSegmentModeComboBox"
+                                              Margin="0,0,0,8"
+                                              SelectionChanged="SegmentModeComboBox_SelectionChanged" />
+                                </UniformGrid>
+                                <TextBlock Margin="0,6,0,0"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="Additional guides render in the preview and save to schema v2. The first four remain available in the detailed controls below." />
+                            </StackPanel>
+                        </controls:SliceSkinPanel>
+
+                        <controls:SliceSkinPanel Style="{StaticResource SkinnedCardStyle}">
+                            <StackPanel>
                                 <TextBlock Text="Vertical Borders"
                                            Foreground="{StaticResource TextBrush}"
                                            FontSize="18"

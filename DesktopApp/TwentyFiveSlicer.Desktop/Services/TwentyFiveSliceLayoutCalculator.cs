@@ -4,9 +4,6 @@ namespace TwentyFiveSlicer.Desktop.Services;
 
 public static class TwentyFiveSliceLayoutCalculator
 {
-    private static readonly bool[] FixedColumns = { true, false, true, false, true };
-    private static readonly bool[] FixedRows = { true, false, true, false, true };
-
     public static IReadOnlyList<SliceRegion> CalculateRegions(
         double sourceWidth,
         double sourceHeight,
@@ -21,26 +18,40 @@ public static class TwentyFiveSliceLayoutCalculator
             return Array.Empty<SliceRegion>();
         }
 
-        double[] xBordersPercent = BuildAxisBorders(sliceData.VerticalBorders);
-        double[] yBordersPercent = BuildAxisBorders(sliceData.HorizontalBorders);
+        TwentyFiveSliceData.EnsureWithinGridCap(sliceData);
+
+        double[] xBordersPercent = BuildAxisStops(sliceData.XGuidesPercent);
+        double[] yBordersPercent = BuildAxisStops(sliceData.YGuidesPercent);
 
         double[] sourceWidths = GetOriginalSizes(xBordersPercent, sourceWidth);
         double[] sourceHeights = GetOriginalSizes(yBordersPercent, sourceHeight);
-        double[] targetWidths = GetAdjustedSizes(Math.Max(0d, targetWidth), sourceWidths, FixedColumns);
-        double[] targetHeights = GetAdjustedSizes(Math.Max(0d, targetHeight), sourceHeights, FixedRows);
+        SliceSegmentDefinition[] xSegments = TwentyFiveSliceData.NormalizeSegments(sliceData.XSegments, sourceWidths.Length);
+        SliceSegmentDefinition[] ySegments = TwentyFiveSliceData.NormalizeSegments(sliceData.YSegments, sourceHeights.Length);
+        double[] targetWidths = GetAdjustedSizes(Math.Max(0d, targetWidth), sourceWidths, xSegments);
+        double[] targetHeights = GetAdjustedSizes(Math.Max(0d, targetHeight), sourceHeights, ySegments);
 
         double[] sourceXPositions = GetPositions(0d, sourceWidths);
         double[] sourceYPositions = GetPositions(0d, sourceHeights);
         double[] targetXPositions = GetPositions(0d, targetWidths);
         double[] targetYPositions = GetPositions(0d, targetHeights);
 
-        var regions = new List<SliceRegion>(25);
-        for (int row = 0; row < 5; row++)
+        var regions = new List<SliceRegion>(sourceWidths.Length * sourceHeights.Length);
+        for (int row = 0; row < sourceHeights.Length; row++)
         {
-            int sourceRow = flipY ? 4 - row : row;
-            for (int column = 0; column < 5; column++)
+            if (ySegments[row].Mode == SliceSegmentMode.Hidden)
             {
-                int sourceColumn = flipX ? 4 - column : column;
+                continue;
+            }
+
+            int sourceRow = flipY ? sourceHeights.Length - 1 - row : row;
+            for (int column = 0; column < sourceWidths.Length; column++)
+            {
+                if (xSegments[column].Mode == SliceSegmentMode.Hidden)
+                {
+                    continue;
+                }
+
+                int sourceColumn = flipX ? sourceWidths.Length - 1 - column : column;
 
                 var sourceRect = new FloatRect(
                     sourceXPositions[sourceColumn],
@@ -66,39 +77,45 @@ public static class TwentyFiveSliceLayoutCalculator
         return regions;
     }
 
-    private static double[] BuildAxisBorders(IReadOnlyList<double> borders)
+    private static double[] BuildAxisStops(IReadOnlyList<double> guides)
     {
-        return
-        [
-            0d,
-            borders.Count > 0 ? borders[0] : 20d,
-            borders.Count > 1 ? borders[1] : 40d,
-            borders.Count > 2 ? borders[2] : 60d,
-            borders.Count > 3 ? borders[3] : 80d,
-            100d
-        ];
+        double[] normalized = TwentyFiveSliceData.NormalizeAxis(guides);
+        double[] stops = new double[normalized.Length + 2];
+        stops[0] = 0d;
+        for (int index = 0; index < normalized.Length; index++)
+        {
+            stops[index + 1] = normalized[index];
+        }
+
+        stops[^1] = 100d;
+        return stops;
     }
 
     private static double[] GetOriginalSizes(IReadOnlyList<double> bordersPercent, double totalSize)
     {
-        return
-        [
-            (bordersPercent[1] - bordersPercent[0]) * totalSize / 100d,
-            (bordersPercent[2] - bordersPercent[1]) * totalSize / 100d,
-            (bordersPercent[3] - bordersPercent[2]) * totalSize / 100d,
-            (bordersPercent[4] - bordersPercent[3]) * totalSize / 100d,
-            (bordersPercent[5] - bordersPercent[4]) * totalSize / 100d
-        ];
+        var sizes = new double[bordersPercent.Count - 1];
+        for (int index = 0; index < sizes.Length; index++)
+        {
+            sizes[index] = (bordersPercent[index + 1] - bordersPercent[index]) * totalSize / 100d;
+        }
+
+        return sizes;
     }
 
-    private static double[] GetAdjustedSizes(double totalSize, IReadOnlyList<double> originalSizes, IReadOnlyList<bool> fixedSizes)
+    private static double[] GetAdjustedSizes(double totalSize, IReadOnlyList<double> originalSizes, IReadOnlyList<SliceSegmentDefinition> segments)
     {
         double totalFixedSize = 0d;
         double totalStretchableSourceSize = 0d;
 
-        for (int index = 0; index < 5; index++)
+        for (int index = 0; index < originalSizes.Count; index++)
         {
-            if (fixedSizes[index])
+            SliceSegmentMode mode = segments[index].Mode;
+            if (mode == SliceSegmentMode.Hidden)
+            {
+                continue;
+            }
+
+            if (mode == SliceSegmentMode.Fixed)
             {
                 totalFixedSize += originalSizes[index];
             }
@@ -108,22 +125,29 @@ public static class TwentyFiveSliceLayoutCalculator
             }
         }
 
-        var adjustedSizes = new double[5];
+        var adjustedSizes = new double[originalSizes.Count];
         if (totalSize < totalFixedSize && totalFixedSize > 0d)
         {
             double scaleRatio = totalSize / totalFixedSize;
-            for (int index = 0; index < 5; index++)
+            for (int index = 0; index < originalSizes.Count; index++)
             {
-                adjustedSizes[index] = fixedSizes[index] ? originalSizes[index] * scaleRatio : 0d;
+                adjustedSizes[index] = segments[index].Mode == SliceSegmentMode.Fixed ? originalSizes[index] * scaleRatio : 0d;
             }
 
             return adjustedSizes;
         }
 
         double totalStretchableTargetSize = Math.Max(0d, totalSize - totalFixedSize);
-        for (int index = 0; index < 5; index++)
+        for (int index = 0; index < originalSizes.Count; index++)
         {
-            if (fixedSizes[index])
+            SliceSegmentMode mode = segments[index].Mode;
+            if (mode == SliceSegmentMode.Hidden)
+            {
+                adjustedSizes[index] = 0d;
+                continue;
+            }
+
+            if (mode == SliceSegmentMode.Fixed)
             {
                 adjustedSizes[index] = originalSizes[index];
                 continue;
@@ -139,7 +163,7 @@ public static class TwentyFiveSliceLayoutCalculator
 
     private static double[] GetPositions(double start, IReadOnlyList<double> sizes)
     {
-        var positions = new double[6];
+        var positions = new double[sizes.Count + 1];
         positions[0] = start;
         for (int index = 1; index < positions.Length; index++)
         {

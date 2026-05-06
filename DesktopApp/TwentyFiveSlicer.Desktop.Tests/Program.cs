@@ -14,6 +14,12 @@ var tests = new (string Name, Action Test)[]
 {
     ("SliceHistory restores undo and redo states", SliceHistoryRestoresUndoAndRedoStates),
     ("Layout calculator matches Unity fixed stretch distribution", LayoutCalculatorMatchesUnityFixedStretchDistribution),
+    ("Variable slice plan is saved", VariableSlicePlanIsSaved),
+    ("Slice data upgrades legacy JSON to variable grid", SliceDataUpgradesLegacyJsonToVariableGrid),
+    ("Slice data round trips variable grid", SliceDataRoundTripsVariableGrid),
+    ("Layout calculator supports extra guides", LayoutCalculatorSupportsExtraGuides),
+    ("Layout calculator skips hidden variable segments", LayoutCalculatorSkipsHiddenVariableSegments),
+    ("Layout calculator enforces variable grid cap", LayoutCalculatorEnforcesVariableGridCap),
     ("Layout calculator scales fixed regions when target is too small", LayoutCalculatorScalesFixedRegionsWhenTargetIsTooSmall),
     ("Layout calculator flips source regions without moving destinations", LayoutCalculatorFlipsSourceRegionsWithoutMovingDestinations),
     ("Preview control renders export bitmap", PreviewControlRendersExportBitmap),
@@ -27,6 +33,7 @@ var tests = new (string Name, Action Test)[]
     ("SliceGuideInteraction converts point to guide percent", SliceGuideInteractionConvertsPointToGuidePercent),
     ("Slice data JSON stays Unity compatible", SliceDataJsonStaysUnityCompatible),
     ("SliceValidation warns when fixed columns exceed target width", SliceValidationWarnsWhenFixedColumnsExceedTargetWidth),
+    ("SliceValidation warns for variable grid hazards", SliceValidationWarnsForVariableGridHazards),
     ("RecentFileList keeps newest unique files first", RecentFileListKeepsNewestUniqueFilesFirst),
     ("BatchPreviewAnalyzer returns warnings per target", BatchPreviewAnalyzerReturnsWarningsPerTarget),
     ("ImageBorderSuggestionService detects transparent padding", ImageBorderSuggestionServiceDetectsTransparentPadding),
@@ -67,6 +74,7 @@ var tests = new (string Name, Action Test)[]
     ("CloudAiAdviceParser extracts inline border suggestions", CloudAiAdviceParserExtractsInlineBorderSuggestions),
     ("CloudAiAdviceParser extracts fenced snake case JSON suggestions", CloudAiAdviceParserExtractsFencedSnakeCaseJsonSuggestions),
     ("CloudAiAdviceParser extracts spaced percentage labels", CloudAiAdviceParserExtractsSpacedPercentageLabels),
+    ("CloudAiAdviceParser extracts variable grid suggestions", CloudAiAdviceParserExtractsVariableGridSuggestions),
     ("IdeAssistantBridge returns discoverable provider JSON", IdeAssistantBridgeReturnsDiscoverableProviderJson),
     ("IdeAssistantBridge returns local analysis JSON", IdeAssistantBridgeReturnsLocalAnalysisJson),
     ("IdeAssistantBridge applies prompt as JSON", IdeAssistantBridgeAppliesPromptAsJson),
@@ -102,6 +110,7 @@ var tests = new (string Name, Action Test)[]
     ("Slice skin panel renders clean fallback", SliceSkinPanelRendersCleanFallback),
     ("Main window uses skinned card surfaces", MainWindowUsesSkinnedCardSurfaces),
     ("Main window exposes Candy skin toggle and button skin", MainWindowExposesCandySkinToggleAndButtonSkin),
+    ("Main window exposes variable grid controls", MainWindowExposesVariableGridControls),
     ("Main window constructs without startup event crash", MainWindowConstructsWithoutStartupEventCrash),
     ("Slice concept diagram renders", SliceConceptDiagramRenders)
 };
@@ -451,6 +460,19 @@ static void MainWindowExposesCandySkinToggleAndButtonSkin()
     Assert.True(xaml.Contains("FallbackBackground=\"{TemplateBinding Background}\"", StringComparison.Ordinal), "Button template should retain clean fallback styling.");
 }
 
+static void MainWindowExposesVariableGridControls()
+{
+    string xamlPath = Path.Combine(DesktopProjectRoot(), "MainWindow.xaml");
+    string xaml = File.ReadAllText(xamlPath);
+
+    Assert.True(xaml.Contains("Text=\"Variable Grid\"", StringComparison.Ordinal), "Main window should expose variable-grid controls.");
+    Assert.True(xaml.Contains("x:Name=\"GridSizeText\"", StringComparison.Ordinal), "Main window should show current variable grid size.");
+    Assert.True(xaml.Contains("Click=\"AddXGuide_Click\"", StringComparison.Ordinal), "Main window should let users add X guides.");
+    Assert.True(xaml.Contains("Click=\"AddYGuide_Click\"", StringComparison.Ordinal), "Main window should let users add Y guides.");
+    Assert.True(xaml.Contains("Click=\"RemoveXGuide_Click\"", StringComparison.Ordinal), "Main window should let users remove X guides.");
+    Assert.True(xaml.Contains("Click=\"RemoveYGuide_Click\"", StringComparison.Ordinal), "Main window should let users remove Y guides.");
+}
+
 static void MainWindowConstructsWithoutStartupEventCrash()
 {
     RunOnStaThread(() =>
@@ -511,6 +533,123 @@ static void LayoutCalculatorMatchesUnityFixedStretchDistribution()
     SliceRegion last = regions.Single(region => region.Column == 4 && region.Row == 4);
     Assert.Equal(150d, last.Destination.X, "Right fixed column should end at target width.");
     Assert.Equal(110d, last.Destination.Y, "Bottom fixed row should end at target height.");
+}
+
+static void VariableSlicePlanIsSaved()
+{
+    string planPath = Path.Combine(RepositoryRoot(), "docs", "variable-slice-grid-plan.md");
+
+    Assert.True(File.Exists(planPath), "Approved variable slice grid plan should be saved before implementation.");
+    string plan = File.ReadAllText(planPath);
+    Assert.True(plan.Contains("schemaVersion: 2", StringComparison.Ordinal), "Plan should document v2 schema.");
+    Assert.True(plan.Contains("100 x 100", StringComparison.Ordinal), "Plan should document the practical grid cap.");
+}
+
+static void SliceDataUpgradesLegacyJsonToVariableGrid()
+{
+    string legacyJson = """
+        {
+          "verticalBorders": [10, 30, 70, 90],
+          "horizontalBorders": [20, 40, 60, 80]
+        }
+        """;
+
+    TwentyFiveSliceData data = JsonSerializer.Deserialize<TwentyFiveSliceData>(legacyJson)!;
+
+    Assert.Equal(2, data.SchemaVersion, "Legacy slice JSON should upgrade to schema v2 in memory.");
+    Assert.SequenceEqual(new[] { 10d, 30d, 70d, 90d }, data.XGuidesPercent);
+    Assert.SequenceEqual(new[] { 20d, 40d, 60d, 80d }, data.YGuidesPercent);
+    Assert.Equal(5, data.XSegments.Length, "Four X guides should create five X segments.");
+    Assert.Equal(5, data.YSegments.Length, "Four Y guides should create five Y segments.");
+    Assert.Equal(SliceSegmentMode.Fixed, data.XSegments[0].Mode, "Outer legacy segment should default to fixed.");
+    Assert.Equal(SliceSegmentMode.Stretch, data.XSegments[1].Mode, "Second legacy segment should default to stretch.");
+}
+
+static void SliceDataRoundTripsVariableGrid()
+{
+    var data = new TwentyFiveSliceData(
+        xGuidesPercent: [10d, 25d, 40d, 60d, 80d, 92d],
+        yGuidesPercent: [15d, 45d, 55d, 85d],
+        xSegments:
+        [
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Hidden),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed)
+        ],
+        ySegments:
+        [
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed)
+        ]);
+
+    string json = JsonSerializer.Serialize(data);
+    TwentyFiveSliceData loaded = JsonSerializer.Deserialize<TwentyFiveSliceData>(json)!;
+
+    Assert.Equal(2, loaded.SchemaVersion, "Variable grid should serialize as v2.");
+    Assert.SequenceEqual(data.XGuidesPercent, loaded.XGuidesPercent);
+    Assert.SequenceEqual(data.YGuidesPercent, loaded.YGuidesPercent);
+    Assert.Equal(SliceSegmentMode.Hidden, loaded.XSegments[2].Mode, "Segment modes should round trip.");
+    Assert.True(!json.Contains("verticalBorders", StringComparison.Ordinal), "V2 saves should prefer xGuidesPercent over legacy verticalBorders.");
+}
+
+static void LayoutCalculatorSupportsExtraGuides()
+{
+    var data = new TwentyFiveSliceData(
+        xGuidesPercent: [10d, 25d, 40d, 60d, 80d, 92d],
+        yGuidesPercent: [20d, 40d, 60d, 80d]);
+
+    IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(
+        100d,
+        100d,
+        260d,
+        100d,
+        data);
+
+    Assert.Equal(35, regions.Count, "Six X guides and four Y guides should render seven by five regions.");
+    Assert.True(regions.Any(region => region.Column == 6 && region.Row == 4), "Final variable column and row should render.");
+}
+
+static void LayoutCalculatorSkipsHiddenVariableSegments()
+{
+    var data = new TwentyFiveSliceData(
+        xGuidesPercent: [20d, 40d, 60d, 80d],
+        yGuidesPercent: [20d, 40d, 60d, 80d],
+        xSegments:
+        [
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Hidden),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed)
+        ]);
+
+    IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(
+        100d,
+        100d,
+        220d,
+        100d,
+        data);
+
+    Assert.Equal(20, regions.Count, "Hidden X segment should remove one full column of five regions.");
+    Assert.True(!regions.Any(region => region.Column == 1), "Hidden column should not produce render regions.");
+    Assert.True(regions.Where(region => region.Column > 1).All(region => region.Destination.X >= 20d), "Columns after hidden segment should close the gap.");
+}
+
+static void LayoutCalculatorEnforcesVariableGridCap()
+{
+    double[] tooManyGuides = Enumerable.Range(1, 100).Select(index => index * 0.5d).ToArray();
+    var data = new TwentyFiveSliceData(tooManyGuides, [20d, 40d, 60d, 80d]);
+
+    Assert.Throws<InvalidOperationException>(
+        () => TwentyFiveSliceLayoutCalculator.CalculateRegions(100d, 100d, 200d, 200d, data),
+        "More than 100 columns should be rejected before rendering.");
 }
 
 static void LayoutCalculatorScalesFixedRegionsWhenTargetIsTooSmall()
@@ -725,8 +864,9 @@ static void SliceDataJsonStaysUnityCompatible()
     string json = JsonSerializer.Serialize(data);
     TwentyFiveSliceData? loaded = JsonSerializer.Deserialize<TwentyFiveSliceData>(json);
 
-    Assert.True(json.Contains("\"verticalBorders\""), "Standalone JSON should use the Unity runtime verticalBorders field name.");
-    Assert.True(json.Contains("\"horizontalBorders\""), "Standalone JSON should use the Unity runtime horizontalBorders field name.");
+    Assert.True(json.Contains("\"schemaVersion\":2"), "Standalone JSON should save the v2 variable-grid schema.");
+    Assert.True(json.Contains("\"xGuidesPercent\""), "Standalone JSON should use the v2 X guide field name.");
+    Assert.True(json.Contains("\"yGuidesPercent\""), "Standalone JSON should use the v2 Y guide field name.");
     Assert.True(loaded is not null, "Standalone JSON should deserialize back into slice data.");
     Assert.SequenceEqual(data.VerticalBorders, loaded!.VerticalBorders);
     Assert.SequenceEqual(data.HorizontalBorders, loaded.HorizontalBorders);
@@ -744,6 +884,33 @@ static void SliceValidationWarnsWhenFixedColumnsExceedTargetWidth()
         data);
 
     Assert.Contains(messages, message => message.Severity == SliceValidationSeverity.Warning && message.Text.Contains("fixed columns"));
+}
+
+static void SliceValidationWarnsForVariableGridHazards()
+{
+    var data = new TwentyFiveSliceData(
+        xGuidesPercent: [0.5d, 10d, 30d, 60d, 90d],
+        yGuidesPercent: [10d, 20d, 40d, 60d, 80d],
+        xSegments:
+        [
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Hidden),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed)
+        ]);
+
+    IReadOnlyList<SliceValidationMessage> messages = SliceValidationService.Validate(
+        sourceWidth: 100d,
+        sourceHeight: 100d,
+        targetWidth: 200d,
+        targetHeight: 200d,
+        data);
+
+    Assert.Contains(messages, message => message.Text.Contains("hidden", StringComparison.OrdinalIgnoreCase));
+    Assert.Contains(messages, message => message.Text.Contains("thinner than 2 pixels", StringComparison.OrdinalIgnoreCase));
+    Assert.Contains(messages, message => message.Text.Contains("6 x 6", StringComparison.OrdinalIgnoreCase));
 }
 
 static void RecentFileListKeepsNewestUniqueFilesFirst()
@@ -1505,6 +1672,25 @@ static void CloudAiAdviceParserExtractsSpacedPercentageLabels()
     Assert.SequenceEqual(new[] { 15d, 45d, 55d, 85d }, data.HorizontalBorders);
 }
 
+static void CloudAiAdviceParserExtractsVariableGridSuggestions()
+{
+    string advice = """
+        Try this grid:
+        {
+          "schemaVersion": 2,
+          "xGuidesPercent": [8, 20, 42, 58, 80, 92],
+          "yGuidesPercent": [12, 35, 65, 88],
+          "xSegments": [{"mode":"fixed"},{"mode":"stretch"},{"mode":"hidden"},{"mode":"stretch"},{"mode":"fixed"},{"mode":"stretch"},{"mode":"fixed"}],
+          "ySegments": [{"mode":"fixed"},{"mode":"stretch"},{"mode":"fixed"},{"mode":"stretch"},{"mode":"fixed"}]
+        }
+        """;
+
+    Assert.True(CloudAiAdviceParser.TryParseSliceData(advice, out TwentyFiveSliceData? data), "Parser should extract v2 variable-grid JSON suggestions.");
+    Assert.SequenceEqual(new[] { 8d, 20d, 42d, 58d, 80d, 92d }, data!.XGuidesPercent);
+    Assert.SequenceEqual(new[] { 12d, 35d, 65d, 88d }, data.YGuidesPercent);
+    Assert.Equal(SliceSegmentMode.Hidden, data.XSegments[2].Mode, "Variable-grid parser should keep segment modes.");
+}
+
 static void IdeAssistantBridgeReturnsDiscoverableProviderJson()
 {
     string json = IdeAssistantBridge.ListProvidersJson();
@@ -1553,8 +1739,8 @@ static void IdeAssistantBridgeAppliesPromptAsJson()
     Assert.Equal("twenty-five-slicer.ai.apply.v1", root.GetProperty("schema").GetString(), "Apply output should expose a stable schema name.");
     Assert.True(root.GetProperty("applied").GetBoolean(), "Known prompts should be applied.");
     JsonElement sliceData = root.GetProperty("sliceData");
-    Assert.Equal(10d, sliceData.GetProperty("verticalBorders")[0].GetDouble(), "Apply output should include Unity-compatible vertical borders.");
-    Assert.Equal(90d, sliceData.GetProperty("verticalBorders")[3].GetDouble(), "Apply output should include Unity-compatible vertical borders.");
+    Assert.Equal(10d, sliceData.GetProperty("xGuidesPercent")[0].GetDouble(), "Apply output should include v2 X guides.");
+    Assert.Equal(90d, sliceData.GetProperty("xGuidesPercent")[3].GetDouble(), "Apply output should include v2 X guides.");
 }
 
 static void IdeAssistantBridgeReturnsPromptPreviewJson()
@@ -1572,7 +1758,7 @@ static void IdeAssistantBridgeReturnsPromptPreviewJson()
 
     Assert.Equal("twenty-five-slicer.ai.prompt.v1", root.GetProperty("schema").GetString(), "Prompt output should expose a stable schema name.");
     Assert.True(root.GetProperty("prompt").GetString()!.Contains("make this safer", StringComparison.OrdinalIgnoreCase), "Prompt preview should include the user request.");
-    Assert.True(root.GetProperty("sliceData").GetProperty("verticalBorders").GetArrayLength() == 4, "Prompt preview should include the slice data being analyzed.");
+    Assert.True(root.GetProperty("sliceData").GetProperty("xGuidesPercent").GetArrayLength() == 4, "Prompt preview should include the slice data being analyzed.");
 }
 
 static void IdeAssistantBridgeReturnsStructuredErrorJson()
@@ -1860,6 +2046,11 @@ static void AssertAxisNear(IReadOnlyList<double> expected, IReadOnlyList<double>
 static string TestProjectRoot()
 {
     return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", ".."));
+}
+
+static string RepositoryRoot()
+{
+    return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 }
 
 static string DesktopProjectRoot()

@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text;
 using System.Security.Cryptography;
 using System.Windows;
@@ -26,8 +26,10 @@ public partial class MainWindow : Window
         WriteIndented = true
     };
 
-    private readonly double[] _verticalBorders = { 20d, 40d, 60d, 80d };
-    private readonly double[] _horizontalBorders = { 20d, 40d, 60d, 80d };
+    private double[] _verticalBorders = { 20d, 40d, 60d, 80d };
+    private double[] _horizontalBorders = { 20d, 40d, 60d, 80d };
+    private SliceSegmentDefinition[] _xSegments = TwentyFiveSliceData.NormalizeSegments(null, 5);
+    private SliceSegmentDefinition[] _ySegments = TwentyFiveSliceData.NormalizeSegments(null, 5);
     private Slider[] _verticalSliders = Array.Empty<Slider>();
     private Slider[] _horizontalSliders = Array.Empty<Slider>();
     private TextBlock[] _verticalValueTexts = Array.Empty<TextBlock>();
@@ -79,6 +81,8 @@ public partial class MainWindow : Window
         CloudAiProviderComboBox.ItemsSource = _cloudAiProviders;
         CloudAiProviderComboBox.SelectedValuePath = nameof(CloudAiProviderDescriptor.Id);
         ChatMessagesListBox.ItemsSource = _chatMessages;
+        XSegmentModeComboBox.ItemsSource = Enum.GetValues<SliceSegmentMode>();
+        YSegmentModeComboBox.ItemsSource = Enum.GetValues<SliceSegmentMode>();
         PreviewControl.PreviewZoomChanged += PreviewControl_PreviewZoomChanged;
         LoadAppState();
         UpdatePresetLibraryUi();
@@ -266,7 +270,7 @@ public partial class MainWindow : Window
             _sourceImage.PixelHeight,
             TargetWidthSlider.Value,
             TargetHeightSlider.Value,
-            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+            CreateCurrentSliceData());
         AssistantResultText.Text = AssistantReportFormatter.FormatAnalysis(_lastAssistantAnalysis);
     }
 
@@ -274,7 +278,7 @@ public partial class MainWindow : Window
     {
         SliceAssistantResult result = _assistant.Apply(
             AssistantPromptBox.Text,
-            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+            CreateCurrentSliceData());
 
         if (result.Applied)
         {
@@ -373,14 +377,14 @@ public partial class MainWindow : Window
         {
             SliceSuggestionReview review = _sourceImage is null
                 ? SliceSuggestionReviewService.Review(
-                    new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+                    CreateCurrentSliceData(),
                     suggestedSliceData,
                     TargetWidthSlider.Value,
                     TargetHeightSlider.Value,
                     TargetWidthSlider.Value,
                     TargetHeightSlider.Value)
                 : SliceSuggestionReviewService.Review(
-                    new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+                    CreateCurrentSliceData(),
                     suggestedSliceData,
                     _sourceImage,
                     TargetWidthSlider.Value,
@@ -422,7 +426,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        SliceAssistantResult result = _assistant.Apply(action.Command, new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+        SliceAssistantResult result = _assistant.Apply(action.Command, CreateCurrentSliceData());
         if (result.Applied)
         {
             ApplySliceData(result.SliceData);
@@ -445,7 +449,7 @@ public partial class MainWindow : Window
             _sourceImage.PixelHeight,
             TargetWidthSlider.Value,
             TargetHeightSlider.Value,
-            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+            CreateCurrentSliceData());
 
         SetCandidateSuggestions(candidates);
         AssistantResultText.Text = AssistantReportFormatter.FormatCandidateList(candidates);
@@ -463,7 +467,7 @@ public partial class MainWindow : Window
             _sourceImage.PixelWidth,
             _sourceImage.PixelHeight,
             PreviewTargetCatalog.GetCommonTargets(),
-            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+            CreateCurrentSliceData());
 
         SetCandidateSuggestions(candidates);
         AssistantResultText.Text = AssistantReportFormatter.FormatCandidateList(candidates);
@@ -511,7 +515,7 @@ public partial class MainWindow : Window
         string key = presetName.StartsWith("User:", StringComparison.OrdinalIgnoreCase)
             ? presetName
             : $"User: {presetName}";
-        _presetLibrary[key] = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders);
+        _presetLibrary[key] = CreateCurrentSliceData();
         UpdatePresetLibraryUi(key);
         SaveAppState();
         AssistantResultText.Text = $"Saved {key}.";
@@ -622,6 +626,80 @@ public partial class MainWindow : Window
         BatchResultsText.Text = $"Exported {targets.Length} previews to {dialog.FolderName}.";
     }
 
+    private void AddXGuide_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryAddGuide(ref _verticalBorders))
+        {
+            ApplyBorderStateToUi();
+            UpdatePreview();
+            RememberCurrentState();
+        }
+    }
+
+    private void AddYGuide_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryAddGuide(ref _horizontalBorders))
+        {
+            ApplyBorderStateToUi();
+            UpdatePreview();
+            RememberCurrentState();
+        }
+    }
+
+    private void RemoveXGuide_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryRemoveGuide(ref _verticalBorders))
+        {
+            ApplyBorderStateToUi();
+            UpdatePreview();
+            RememberCurrentState();
+        }
+    }
+
+    private void RemoveYGuide_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryRemoveGuide(ref _horizontalBorders))
+        {
+            ApplyBorderStateToUi();
+            UpdatePreview();
+            RememberCurrentState();
+        }
+    }
+
+    private void SegmentComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        SyncSelectedSegmentModeControls();
+    }
+
+    private void SegmentModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi || sender is not ComboBox comboBox || comboBox.SelectedItem is not SliceSegmentMode mode)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(comboBox, XSegmentModeComboBox) && XSegmentComboBox.SelectedIndex >= 0 && XSegmentComboBox.SelectedIndex < _xSegments.Length)
+        {
+            _xSegments[XSegmentComboBox.SelectedIndex] = new SliceSegmentDefinition(mode);
+        }
+        else if (ReferenceEquals(comboBox, YSegmentModeComboBox) && YSegmentComboBox.SelectedIndex >= 0 && YSegmentComboBox.SelectedIndex < _ySegments.Length)
+        {
+            _ySegments[YSegmentComboBox.SelectedIndex] = new SliceSegmentDefinition(mode);
+        }
+        else
+        {
+            return;
+        }
+
+        UpdatePreview();
+        RememberCurrentState();
+    }
+
     private void PresetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_isUpdatingUi || PresetComboBox.SelectedItem is not string presetName || !_presetLibrary.TryGetValue(presetName, out TwentyFiveSliceData? data))
@@ -686,6 +764,11 @@ public partial class MainWindow : Window
 
         int index = int.Parse(tag[1].ToString());
         double[] borders = tag[0] == 'V' ? _verticalBorders : _horizontalBorders;
+        if (index >= borders.Length)
+        {
+            return;
+        }
+
         borders[index] = slider.Value;
         NormalizeBorders(borders);
         ApplyBorderStateToUi();
@@ -734,6 +817,11 @@ public partial class MainWindow : Window
     private void PreviewControl_GuideEditChanged(object? sender, SliceGuideEditEventArgs e)
     {
         double[] borders = e.IsVertical ? _verticalBorders : _horizontalBorders;
+        if (e.Index < 0 || e.Index >= borders.Length)
+        {
+            return;
+        }
+
         borders[e.Index] = e.Percent;
         NormalizeBorders(borders);
         ApplyBorderStateToUi();
@@ -909,11 +997,10 @@ public partial class MainWindow : Window
 
     private void ApplySliceData(TwentyFiveSliceData data)
     {
-        double[] verticalBorders = TwentyFiveSliceData.NormalizeAxis(data.VerticalBorders);
-        double[] horizontalBorders = TwentyFiveSliceData.NormalizeAxis(data.HorizontalBorders);
-
-        Array.Copy(verticalBorders, _verticalBorders, _verticalBorders.Length);
-        Array.Copy(horizontalBorders, _horizontalBorders, _horizontalBorders.Length);
+        _verticalBorders = TwentyFiveSliceData.NormalizeAxis(data.VerticalBorders);
+        _horizontalBorders = TwentyFiveSliceData.NormalizeAxis(data.HorizontalBorders);
+        _xSegments = TwentyFiveSliceData.NormalizeSegments(data.XSegments, _verticalBorders.Length + 1);
+        _ySegments = TwentyFiveSliceData.NormalizeSegments(data.YSegments, _horizontalBorders.Length + 1);
 
         ApplyBorderStateToUi();
         UpdatePreview();
@@ -923,11 +1010,24 @@ public partial class MainWindow : Window
     {
         NormalizeBorders(_verticalBorders);
         NormalizeBorders(_horizontalBorders);
+        _xSegments = TwentyFiveSliceData.NormalizeSegments(_xSegments, _verticalBorders.Length + 1);
+        _ySegments = TwentyFiveSliceData.NormalizeSegments(_ySegments, _horizontalBorders.Length + 1);
 
         _isUpdatingUi = true;
+        GridSizeText.Text = $"{_verticalBorders.Length + 1} x {_horizontalBorders.Length + 1} cells ({_verticalBorders.Length} X guides, {_horizontalBorders.Length} Y guides)";
+        RefreshSegmentControls();
 
         for (int index = 0; index < _verticalSliders.Length; index++)
         {
+            if (index >= _verticalBorders.Length)
+            {
+                _verticalSliders[index].IsEnabled = false;
+                _verticalValueTexts[index].Text = "n/a";
+                _verticalTextBoxes[index].Text = string.Empty;
+                continue;
+            }
+
+            _verticalSliders[index].IsEnabled = true;
             double minimum = index == 0 ? 0d : _verticalBorders[index - 1];
             double maximum = index == _verticalBorders.Length - 1 ? 100d : _verticalBorders[index + 1];
             _verticalSliders[index].Minimum = minimum;
@@ -941,6 +1041,15 @@ public partial class MainWindow : Window
 
         for (int index = 0; index < _horizontalSliders.Length; index++)
         {
+            if (index >= _horizontalBorders.Length)
+            {
+                _horizontalSliders[index].IsEnabled = false;
+                _horizontalValueTexts[index].Text = "n/a";
+                _horizontalTextBoxes[index].Text = string.Empty;
+                continue;
+            }
+
+            _horizontalSliders[index].IsEnabled = true;
             double minimum = index == 0 ? 0d : _horizontalBorders[index - 1];
             double maximum = index == _horizontalBorders.Length - 1 ? 100d : _horizontalBorders[index + 1];
             _horizontalSliders[index].Minimum = minimum;
@@ -955,6 +1064,36 @@ public partial class MainWindow : Window
         _isUpdatingUi = false;
     }
 
+    private void RefreshSegmentControls()
+    {
+        int selectedX = Math.Clamp(XSegmentComboBox.SelectedIndex, 0, Math.Max(0, _xSegments.Length - 1));
+        int selectedY = Math.Clamp(YSegmentComboBox.SelectedIndex, 0, Math.Max(0, _ySegments.Length - 1));
+
+        XSegmentComboBox.ItemsSource = BuildSegmentLabels("X", _verticalBorders);
+        YSegmentComboBox.ItemsSource = BuildSegmentLabels("Y", _horizontalBorders);
+        XSegmentComboBox.SelectedIndex = _xSegments.Length == 0 ? -1 : selectedX;
+        YSegmentComboBox.SelectedIndex = _ySegments.Length == 0 ? -1 : selectedY;
+        SyncSelectedSegmentModeControls();
+    }
+
+    private void SyncSelectedSegmentModeControls()
+    {
+        _isUpdatingUi = true;
+        try
+        {
+            XSegmentModeComboBox.SelectedItem = XSegmentComboBox.SelectedIndex >= 0 && XSegmentComboBox.SelectedIndex < _xSegments.Length
+                ? _xSegments[XSegmentComboBox.SelectedIndex].Mode
+                : null;
+            YSegmentModeComboBox.SelectedItem = YSegmentComboBox.SelectedIndex >= 0 && YSegmentComboBox.SelectedIndex < _ySegments.Length
+                ? _ySegments[YSegmentComboBox.SelectedIndex].Mode
+                : null;
+        }
+        finally
+        {
+            _isUpdatingUi = false;
+        }
+    }
+
     private void UpdatePreview()
     {
         TargetWidthValueText.Text = $"{TargetWidthSlider.Value:0} px";
@@ -962,7 +1101,7 @@ public partial class MainWindow : Window
         PreviewZoomValueText.Text = $"{PreviewZoomSlider.Value * 100d:0}%";
 
         PreviewControl.SourceImage = _sourceImage;
-        PreviewControl.SliceData = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders);
+        PreviewControl.SliceData = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders, _xSegments, _ySegments);
         PreviewControl.TargetWidth = TargetWidthSlider.Value;
         PreviewControl.TargetHeight = TargetHeightSlider.Value;
         PreviewControl.PreviewZoom = PreviewZoomSlider.Value;
@@ -986,14 +1125,14 @@ public partial class MainWindow : Window
             throw new InvalidDataException("The selected file does not contain slice data.");
         }
 
-        ApplySliceData(new TwentyFiveSliceData(loaded.VerticalBorders, loaded.HorizontalBorders));
+        ApplySliceData(loaded);
         RememberCurrentState();
         PreviewHintText.Text = $"Loaded {Path.GetFileName(filePath)}.";
     }
 
     private string CreateSliceJson()
     {
-        var data = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders);
+        var data = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders, _xSegments, _ySegments);
         return JsonSerializer.Serialize(data, JsonOptions);
     }
 
@@ -1065,6 +1204,11 @@ public partial class MainWindow : Window
 
         int index = int.Parse(tag[1].ToString());
         double[] borders = tag[0] == 'V' ? _verticalBorders : _horizontalBorders;
+        if (index >= borders.Length)
+        {
+            return;
+        }
+
         borders[index] = value;
         NormalizeBorders(borders);
         ApplyBorderStateToUi();
@@ -1078,13 +1222,17 @@ public partial class MainWindow : Window
             (double[])_verticalBorders.Clone(),
             (double[])_horizontalBorders.Clone(),
             TargetWidthSlider.Value,
-            TargetHeightSlider.Value);
+            TargetHeightSlider.Value,
+            _xSegments.ToArray(),
+            _ySegments.ToArray());
     }
 
     private void ApplyEditorState(SliceEditorState state)
     {
-        Array.Copy(TwentyFiveSliceData.NormalizeAxis(state.VerticalBorders), _verticalBorders, _verticalBorders.Length);
-        Array.Copy(TwentyFiveSliceData.NormalizeAxis(state.HorizontalBorders), _horizontalBorders, _horizontalBorders.Length);
+        _verticalBorders = TwentyFiveSliceData.NormalizeAxis(state.VerticalBorders);
+        _horizontalBorders = TwentyFiveSliceData.NormalizeAxis(state.HorizontalBorders);
+        _xSegments = TwentyFiveSliceData.NormalizeSegments(state.XSegments, _verticalBorders.Length + 1);
+        _ySegments = TwentyFiveSliceData.NormalizeSegments(state.YSegments, _horizontalBorders.Length + 1);
         SetTargetSize(state.TargetWidth, state.TargetHeight);
         ApplyBorderStateToUi();
         UpdatePreview();
@@ -1199,12 +1347,12 @@ public partial class MainWindow : Window
             _sourceImage.PixelHeight,
             TargetWidthSlider.Value,
             TargetHeightSlider.Value,
-            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+            CreateCurrentSliceData());
 
         foreach (SliceCandidateSuggestion candidate in candidates)
         {
             SliceSuggestionReview review = SliceSuggestionReviewService.Review(
-                new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+                CreateCurrentSliceData(),
                 candidate.SliceData,
                 _sourceImage,
                 TargetWidthSlider.Value,
@@ -1259,7 +1407,7 @@ public partial class MainWindow : Window
         double sourceWidth = _sourceImage?.PixelWidth ?? TargetWidthSlider.Value;
         double sourceHeight = _sourceImage?.PixelHeight ?? TargetHeightSlider.Value;
         return new SliceChatContext(
-            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+            CreateCurrentSliceData(),
             sourceWidth,
             sourceHeight,
             TargetWidthSlider.Value,
@@ -1386,6 +1534,11 @@ public partial class MainWindow : Window
             : _cloudAiSecretStore.DescribeStatus(provider, CreateCloudAiSettings());
     }
 
+    private TwentyFiveSliceData CreateCurrentSliceData()
+    {
+        return new TwentyFiveSliceData(_verticalBorders, _horizontalBorders, _xSegments, _ySegments);
+    }
+
     private string BuildCloudAiPrompt()
     {
         var builder = new StringBuilder();
@@ -1448,7 +1601,7 @@ public partial class MainWindow : Window
             _sourceImage.PixelHeight,
             TargetWidthSlider.Value,
             TargetHeightSlider.Value,
-            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+            CreateCurrentSliceData());
         return AssistantReportFormatter.FormatAnalysis(analysis);
     }
 
@@ -1483,7 +1636,7 @@ public partial class MainWindow : Window
         return new DesktopSessionState
         {
             ImagePath = _imagePath,
-            SliceData = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+            SliceData = CreateCurrentSliceData(),
             TargetWidth = TargetWidthSlider.Value,
             TargetHeight = TargetHeightSlider.Value,
             PreviewZoom = PreviewZoomSlider.Value,
@@ -1562,7 +1715,7 @@ public partial class MainWindow : Window
             _sourceImage.PixelHeight,
             TargetWidthSlider.Value,
             TargetHeightSlider.Value,
-            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders));
+            CreateCurrentSliceData());
 
         ValidationText.Text = string.Join(Environment.NewLine, messages.Select(FormatValidationMessage));
     }
@@ -1580,7 +1733,7 @@ public partial class MainWindow : Window
         IReadOnlyList<BatchPreviewResult> results = BatchPreviewAnalyzer.Analyze(
             _sourceImage.PixelWidth,
             _sourceImage.PixelHeight,
-            new TwentyFiveSliceData(_verticalBorders, _horizontalBorders),
+            CreateCurrentSliceData(),
             targets);
 
         var builder = new StringBuilder();
@@ -1620,5 +1773,54 @@ public partial class MainWindow : Window
         {
             borders[index] = Math.Min(borders[index], borders[index + 1]);
         }
+    }
+
+    private static bool TryAddGuide(ref double[] guides)
+    {
+        if (guides.Length >= TwentyFiveSliceData.MaxSegmentsPerAxis - 1)
+        {
+            return false;
+        }
+
+        double[] stops = [0d, .. TwentyFiveSliceData.NormalizeAxis(guides), 100d];
+        double bestStart = 0d;
+        double bestEnd = 100d;
+        double bestSize = -1d;
+        for (int index = 0; index < stops.Length - 1; index++)
+        {
+            double size = stops[index + 1] - stops[index];
+            if (size > bestSize)
+            {
+                bestSize = size;
+                bestStart = stops[index];
+                bestEnd = stops[index + 1];
+            }
+        }
+
+        guides = TwentyFiveSliceData.NormalizeAxis([.. guides, (bestStart + bestEnd) / 2d]);
+        return true;
+    }
+
+    private static bool TryRemoveGuide(ref double[] guides)
+    {
+        if (guides.Length == 0)
+        {
+            return false;
+        }
+
+        guides = TwentyFiveSliceData.NormalizeAxis(guides.Take(guides.Length - 1));
+        return true;
+    }
+
+    private static string[] BuildSegmentLabels(string axis, IReadOnlyList<double> guides)
+    {
+        double[] stops = [0d, .. TwentyFiveSliceData.NormalizeAxis(guides), 100d];
+        var labels = new string[stops.Length - 1];
+        for (int index = 0; index < labels.Length; index++)
+        {
+            labels[index] = $"{axis}{index}: {stops[index]:0.#}% - {stops[index + 1]:0.#}%";
+        }
+
+        return labels;
     }
 }

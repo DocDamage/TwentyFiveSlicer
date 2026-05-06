@@ -21,8 +21,21 @@ public static class SliceValidationService
 
         double[] vertical = BuildSizes(sliceData.VerticalBorders, sourceWidth);
         double[] horizontal = BuildSizes(sliceData.HorizontalBorders, sourceHeight);
-        double fixedColumns = vertical[0] + vertical[2] + vertical[4];
-        double fixedRows = horizontal[0] + horizontal[2] + horizontal[4];
+        SliceSegmentDefinition[] xSegments = TwentyFiveSliceData.NormalizeSegments(sliceData.XSegments, vertical.Length);
+        SliceSegmentDefinition[] ySegments = TwentyFiveSliceData.NormalizeSegments(sliceData.YSegments, horizontal.Length);
+        int columns = vertical.Length;
+        int rows = horizontal.Length;
+        double fixedColumns = GetFixedSize(vertical, xSegments);
+        double fixedRows = GetFixedSize(horizontal, ySegments);
+
+        if (columns > TwentyFiveSliceData.MaxSegmentsPerAxis || rows > TwentyFiveSliceData.MaxSegmentsPerAxis)
+        {
+            messages.Add(new SliceValidationMessage(SliceValidationSeverity.Warning, $"The grid is {columns} x {rows}, above the {TwentyFiveSliceData.MaxSegmentsPerAxis} x {TwentyFiveSliceData.MaxSegmentsPerAxis} safety cap."));
+        }
+        else if (columns != 5 || rows != 5)
+        {
+            messages.Add(new SliceValidationMessage(SliceValidationSeverity.Info, $"Variable grid is {columns} x {rows} cells."));
+        }
 
         if (fixedColumns > targetWidth)
         {
@@ -39,6 +52,13 @@ public static class SliceValidationService
             messages.Add(new SliceValidationMessage(SliceValidationSeverity.Warning, "One or more slice regions is thinner than 2 pixels."));
         }
 
+        int hiddenColumns = xSegments.Count(segment => segment.Mode == SliceSegmentMode.Hidden);
+        int hiddenRows = ySegments.Count(segment => segment.Mode == SliceSegmentMode.Hidden);
+        if (hiddenColumns > 0 || hiddenRows > 0)
+        {
+            messages.Add(new SliceValidationMessage(SliceValidationSeverity.Info, $"Hidden segments: {hiddenColumns} columns, {hiddenRows} rows."));
+        }
+
         if (messages.Count == 0)
         {
             messages.Add(new SliceValidationMessage(SliceValidationSeverity.Info, "No slice warnings for this target."));
@@ -50,14 +70,27 @@ public static class SliceValidationService
     private static double[] BuildSizes(IReadOnlyList<double> borders, double totalSize)
     {
         double[] normalized = TwentyFiveSliceData.NormalizeAxis(borders);
-        double[] stops = [0d, normalized[0], normalized[1], normalized[2], normalized[3], 100d];
-        return
-        [
-            (stops[1] - stops[0]) * totalSize / 100d,
-            (stops[2] - stops[1]) * totalSize / 100d,
-            (stops[3] - stops[2]) * totalSize / 100d,
-            (stops[4] - stops[3]) * totalSize / 100d,
-            (stops[5] - stops[4]) * totalSize / 100d
-        ];
+        double[] stops = [0d, .. normalized, 100d];
+        var sizes = new double[stops.Length - 1];
+        for (int index = 0; index < sizes.Length; index++)
+        {
+            sizes[index] = (stops[index + 1] - stops[index]) * totalSize / 100d;
+        }
+
+        return sizes;
+    }
+
+    private static double GetFixedSize(IReadOnlyList<double> sizes, IReadOnlyList<SliceSegmentDefinition> segments)
+    {
+        double total = 0d;
+        for (int index = 0; index < sizes.Count; index++)
+        {
+            if (segments[index].Mode == SliceSegmentMode.Fixed)
+            {
+                total += sizes[index];
+            }
+        }
+
+        return total;
     }
 }
