@@ -715,6 +715,22 @@ public partial class MainWindow : Window
         }
     }
 
+    private void NudgeGuide_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not string tag)
+        {
+            return;
+        }
+
+        string[] parts = tag.Split(':', StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 || !double.TryParse(parts[1], out double deltaPercent))
+        {
+            return;
+        }
+
+        NudgeGuidePercent(parts[0], deltaPercent);
+    }
+
     private void GuidePercentBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter)
@@ -1394,16 +1410,53 @@ public partial class MainWindow : Window
             return;
         }
 
-        bool isVertical = axis.Equals("X", StringComparison.OrdinalIgnoreCase);
-        int selectedIndex = isVertical ? _selectedXGuideIndex : _selectedYGuideIndex;
-        double[] borders = isVertical ? _verticalBorders : _horizontalBorders;
-        TextBox textBox = isVertical ? XGuidePercentBox : YGuidePercentBox;
-        if (selectedIndex < 0 || selectedIndex >= borders.Length || !double.TryParse(textBox.Text, out double value))
+        if (TryReadGuideSelection(axis, out bool isVertical, out int selectedIndex, out _, out TextBox textBox) &&
+            double.TryParse(textBox.Text, out double value))
+        {
+            ApplyGuideValue(isVertical, selectedIndex, value);
+        }
+        else
         {
             ApplyBorderStateToUi();
+        }
+    }
+
+    private void NudgeGuidePercent(string axis, double deltaPercent)
+    {
+        if (_isUpdatingUi)
+        {
             return;
         }
 
+        if (!TryReadGuideSelection(axis, out bool isVertical, out int selectedIndex, out double[] borders, out _))
+        {
+            return;
+        }
+
+        ApplyGuideValue(isVertical, selectedIndex, borders[selectedIndex] + deltaPercent);
+    }
+
+    private bool TryReadGuideSelection(string axis, out bool isVertical, out int selectedIndex, out double[] borders, out TextBox textBox)
+    {
+        isVertical = axis.Equals("X", StringComparison.OrdinalIgnoreCase);
+        selectedIndex = isVertical ? _selectedXGuideIndex : _selectedYGuideIndex;
+        double[] selectedBorders = isVertical ? _verticalBorders : _horizontalBorders;
+        TextBox selectedTextBox = isVertical ? XGuidePercentBox : YGuidePercentBox;
+        if (selectedIndex < 0 || selectedIndex >= selectedBorders.Length)
+        {
+            borders = selectedBorders;
+            textBox = selectedTextBox;
+            return false;
+        }
+
+        borders = selectedBorders;
+        textBox = selectedTextBox;
+        return true;
+    }
+
+    private void ApplyGuideValue(bool isVertical, int selectedIndex, double value)
+    {
+        double[] borders = isVertical ? _verticalBorders : _horizontalBorders;
         value = Math.Clamp(value, 0.01d, 99.99d);
         double[] updated = (double[])borders.Clone();
         updated[selectedIndex] = value;

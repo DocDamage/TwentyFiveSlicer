@@ -481,6 +481,10 @@ static void MainWindowExposesVariableGridControls()
     Assert.True(xaml.Contains("x:Name=\"XGuidePercentBox\"", StringComparison.Ordinal), "Main window should let users edit any selected X guide percentage.");
     Assert.True(xaml.Contains("x:Name=\"YGuidePercentBox\"", StringComparison.Ordinal), "Main window should let users edit any selected Y guide percentage.");
     Assert.True(xaml.Contains("Click=\"ApplyGuidePercent_Click\"", StringComparison.Ordinal), "Main window should commit dynamic guide percentage edits.");
+    Assert.True(xaml.Contains("x:Key=\"CompactActionButtonStyle\"", StringComparison.Ordinal), "Compact guide edit buttons should avoid clipping in the sidebar.");
+    Assert.True(xaml.Contains("Click=\"NudgeGuide_Click\"", StringComparison.Ordinal), "Main window should support precise guide nudging.");
+    Assert.True(xaml.Contains("Tag=\"X:-0.1\"", StringComparison.Ordinal), "X guide controls should include fine negative nudging.");
+    Assert.True(xaml.Contains("Tag=\"Y:0.1\"", StringComparison.Ordinal), "Y guide controls should include fine positive nudging.");
 }
 
 static void MainWindowConstructsWithoutStartupEventCrash()

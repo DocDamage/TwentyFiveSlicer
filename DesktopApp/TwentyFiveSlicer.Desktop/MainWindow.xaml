@@ -100,6 +100,12 @@
             <Setter Property="ToolTipService.ShowDuration" Value="30000" />
         </Style>
 
+        <Style x:Key="CompactActionButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="MinWidth" Value="58" />
+            <Setter Property="Padding" Value="8,7" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+
         <Style x:Key="LabelStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="FontSize" Value="14" />
@@ -610,9 +616,15 @@
                                     <Button Grid.Column="2"
                                             Content="Set X"
                                             Tag="X"
-                                            Style="{StaticResource ActionButtonStyle}"
+                                            Style="{StaticResource CompactActionButtonStyle}"
                                             Click="ApplyGuidePercent_Click" />
                                 </Grid>
+                                <UniformGrid Columns="4">
+                                    <Button Content="-1%" Tag="X:-1" Style="{StaticResource CompactActionButtonStyle}" Click="NudgeGuide_Click" />
+                                    <Button Content="-0.1%" Tag="X:-0.1" Style="{StaticResource CompactActionButtonStyle}" Click="NudgeGuide_Click" />
+                                    <Button Content="+0.1%" Tag="X:0.1" Style="{StaticResource CompactActionButtonStyle}" Click="NudgeGuide_Click" />
+                                    <Button Content="+1%" Tag="X:1" Style="{StaticResource CompactActionButtonStyle}" Click="NudgeGuide_Click" />
+                                </UniformGrid>
                                 <TextBlock Text="Y guides"
                                            Style="{StaticResource LabelStyle}"
                                            Margin="0,0,0,6" />
@@ -633,9 +645,15 @@
                                     <Button Grid.Column="2"
                                             Content="Set Y"
                                             Tag="Y"
-                                            Style="{StaticResource ActionButtonStyle}"
+                                            Style="{StaticResource CompactActionButtonStyle}"
                                             Click="ApplyGuidePercent_Click" />
                                 </Grid>
+                                <UniformGrid Columns="4">
+                                    <Button Content="-1%" Tag="Y:-1" Style="{StaticResource CompactActionButtonStyle}" Click="NudgeGuide_Click" />
+                                    <Button Content="-0.1%" Tag="Y:-0.1" Style="{StaticResource CompactActionButtonStyle}" Click="NudgeGuide_Click" />
+                                    <Button Content="+0.1%" Tag="Y:0.1" Style="{StaticResource CompactActionButtonStyle}" Click="NudgeGuide_Click" />
+                                    <Button Content="+1%" Tag="Y:1" Style="{StaticResource CompactActionButtonStyle}" Click="NudgeGuide_Click" />
+                                </UniformGrid>
                                 <TextBlock Text="X segment"
                                            Style="{StaticResource LabelStyle}"
                                            Margin="0,8,0,6" />
