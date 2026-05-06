@@ -25,8 +25,19 @@ public sealed class AppStateStore
             return new DesktopAppState();
         }
 
-        string json = File.ReadAllText(_filePath);
-        return JsonSerializer.Deserialize<DesktopAppState>(json, JsonOptions) ?? new DesktopAppState();
+        try
+        {
+            string json = File.ReadAllText(_filePath);
+            return JsonSerializer.Deserialize<DesktopAppState>(json, JsonOptions) ?? new DesktopAppState();
+        }
+        catch (IOException)
+        {
+            return new DesktopAppState();
+        }
+        catch (JsonException)
+        {
+            return new DesktopAppState();
+        }
     }
 
     public void Save(DesktopAppState state)

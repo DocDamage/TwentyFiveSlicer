@@ -118,8 +118,19 @@ public sealed class CloudAiSecretStore
             return new CloudAiSecretFile();
         }
 
-        string json = File.ReadAllText(_filePath);
-        return JsonSerializer.Deserialize<CloudAiSecretFile>(json, JsonOptions) ?? new CloudAiSecretFile();
+        try
+        {
+            string json = File.ReadAllText(_filePath);
+            return JsonSerializer.Deserialize<CloudAiSecretFile>(json, JsonOptions) ?? new CloudAiSecretFile();
+        }
+        catch (IOException)
+        {
+            return new CloudAiSecretFile();
+        }
+        catch (JsonException)
+        {
+            return new CloudAiSecretFile();
+        }
     }
 
     private void SaveFile(CloudAiSecretFile file)

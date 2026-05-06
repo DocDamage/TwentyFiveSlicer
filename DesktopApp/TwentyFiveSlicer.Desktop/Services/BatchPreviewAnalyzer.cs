@@ -8,12 +8,14 @@ public static class BatchPreviewAnalyzer
         double sourceWidth,
         double sourceHeight,
         TwentyFiveSliceData sliceData,
-        IEnumerable<PreviewTarget> targets)
+        IEnumerable<PreviewTarget> targets,
+        UnityRuntimeSettings? runtimeSettings = null,
+        string? targetKind = null)
     {
         return targets
             .Select(target => new BatchPreviewResult(
                 target,
-                SliceValidationService.Validate(sourceWidth, sourceHeight, target.Width, target.Height, sliceData)))
+                SliceValidationService.Validate(sourceWidth, sourceHeight, target.Width, target.Height, sliceData, runtimeSettings, targetKind)))
             .ToArray();
     }
 }

@@ -76,15 +76,31 @@ public static class DesktopHandoffEnvelopeService
             return false;
         }
 
-        using JsonDocument document = JsonDocument.Parse(json);
-        return document.RootElement.ValueKind == JsonValueKind.Object &&
-               document.RootElement.TryGetProperty("sliceData", out _);
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            return document.RootElement.ValueKind == JsonValueKind.Object &&
+                   document.RootElement.TryGetProperty("sliceData", out _);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     public static DesktopHandoffEnvelopeImportResult Import(string envelopePath)
     {
         string json = File.ReadAllText(envelopePath);
-        DesktopHandoffEnvelope? envelope = JsonSerializer.Deserialize<DesktopHandoffEnvelope>(json, JsonOptions);
+        DesktopHandoffEnvelope? envelope;
+        try
+        {
+            envelope = JsonSerializer.Deserialize<DesktopHandoffEnvelope>(json, JsonOptions);
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException("The selected file contains malformed desktop handoff JSON.", exception);
+        }
+
         if (envelope?.SliceData is null)
         {
             throw new InvalidDataException("The selected file does not contain a valid desktop handoff envelope.");

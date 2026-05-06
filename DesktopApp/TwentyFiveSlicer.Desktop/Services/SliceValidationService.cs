@@ -9,7 +9,9 @@ public static class SliceValidationService
         double sourceHeight,
         double targetWidth,
         double targetHeight,
-        TwentyFiveSliceData sliceData)
+        TwentyFiveSliceData sliceData,
+        UnityRuntimeSettings? runtimeSettings = null,
+        string? targetKind = null)
     {
         var messages = new List<SliceValidationMessage>();
 
@@ -57,6 +59,11 @@ public static class SliceValidationService
         if (hiddenColumns > 0 || hiddenRows > 0)
         {
             messages.Add(new SliceValidationMessage(SliceValidationSeverity.Info, $"Hidden segments: {hiddenColumns} columns, {hiddenRows} rows."));
+        }
+
+        if (runtimeSettings is not null || !string.IsNullOrWhiteSpace(targetKind))
+        {
+            AddRuntimeMetadataHazards(messages, sourceWidth, sourceHeight, targetWidth, targetHeight, UnityRuntimeSettings.Normalize(runtimeSettings), targetKind);
         }
 
         if (messages.Count == 0)
@@ -122,6 +129,89 @@ public static class SliceValidationService
         }
 
         return total;
+    }
+
+    private static void AddRuntimeMetadataHazards(
+        List<SliceValidationMessage> messages,
+        double sourceWidth,
+        double sourceHeight,
+        double targetWidth,
+        double targetHeight,
+        UnityRuntimeSettings settings,
+        string? targetKind)
+    {
+        if (settings.PixelsPerUnit < 1d || settings.PixelsPerUnit > 1024d)
+        {
+            messages.Add(new SliceValidationMessage(SliceValidationSeverity.Warning, $"Pixels per unit {settings.PixelsPerUnit:0.###} is unusual for Unity handoff."));
+        }
+
+        if (!settings.UseSpritePivot &&
+            (Math.Abs(settings.CustomPivotX) > sourceWidth || Math.Abs(settings.CustomPivotY) > sourceHeight))
+        {
+            messages.Add(new SliceValidationMessage(SliceValidationSeverity.Warning, $"Custom pivot ({settings.CustomPivotX:0.###}, {settings.CustomPivotY:0.###}) sits outside the {sourceWidth:0.###} x {sourceHeight:0.###}px source bounds."));
+        }
+
+        string normalizedTargetKind = string.IsNullOrWhiteSpace(targetKind) ? DesktopHandoffEnvelope.DefaultTargetKind : targetKind.Trim();
+        switch (normalizedTargetKind)
+        {
+            case DesktopHandoffEnvelope.DefaultTargetKind:
+                messages.Add(new SliceValidationMessage(SliceValidationSeverity.Info, "Sprite Asset profile preserves runtime metadata for handoff, but Unity will not apply component-specific settings until you choose a component target."));
+                break;
+
+            case UnityTargetProfileCatalog.TwentyFiveSliceImageKind:
+                if (!string.Equals(settings.SortingLayerName, "Default", StringComparison.OrdinalIgnoreCase) || settings.SortingOrder != 0)
+                {
+                    messages.Add(new SliceValidationMessage(SliceValidationSeverity.Info, "TwentyFiveSliceImage uses Canvas ordering, so sorting layer/order metadata is ignored on import."));
+                }
+
+                if (!settings.UseSpritePivot || Math.Abs(settings.CustomPivotX) > 0.001d || Math.Abs(settings.CustomPivotY) > 0.001d)
+                {
+                    messages.Add(new SliceValidationMessage(SliceValidationSeverity.Info, "TwentyFiveSliceImage ignores custom pivot overrides; the UI RectTransform controls the effective pivot."));
+                }
+
+                if (HasAnyRaycastPadding(settings) && IsLargeRaycastPadding(settings, targetWidth, targetHeight))
+                {
+                    messages.Add(new SliceValidationMessage(SliceValidationSeverity.Warning, $"Raycast padding is large relative to the {targetWidth:0.###} x {targetHeight:0.###}px target."));
+                }
+
+                break;
+
+            case UnityTargetProfileCatalog.TwentyFiveSliceSpriteRendererKind:
+                if (settings.RaycastTarget || HasAnyRaycastPadding(settings))
+                {
+                    messages.Add(new SliceValidationMessage(SliceValidationSeverity.Info, "TwentyFiveSliceSpriteRenderer ignores raycast target and raycast padding metadata."));
+                }
+
+                break;
+
+            case UnityTargetProfileCatalog.SpriteRendererKind:
+                if (settings.RaycastTarget || HasAnyRaycastPadding(settings))
+                {
+                    messages.Add(new SliceValidationMessage(SliceValidationSeverity.Info, "SpriteRenderer ignores raycast target and raycast padding metadata."));
+                }
+
+                if (!settings.UseSpritePivot || Math.Abs(settings.CustomPivotX) > 0.001d || Math.Abs(settings.CustomPivotY) > 0.001d)
+                {
+                    messages.Add(new SliceValidationMessage(SliceValidationSeverity.Info, "SpriteRenderer ignores custom pivot overrides from desktop handoff metadata."));
+                }
+
+                break;
+        }
+    }
+
+    private static bool HasAnyRaycastPadding(UnityRuntimeSettings settings)
+    {
+        return Math.Abs(settings.RaycastPaddingLeft) > 0.001d ||
+               Math.Abs(settings.RaycastPaddingBottom) > 0.001d ||
+               Math.Abs(settings.RaycastPaddingRight) > 0.001d ||
+               Math.Abs(settings.RaycastPaddingTop) > 0.001d;
+    }
+
+    private static bool IsLargeRaycastPadding(UnityRuntimeSettings settings, double targetWidth, double targetHeight)
+    {
+        double maxHorizontal = Math.Max(Math.Abs(settings.RaycastPaddingLeft), Math.Abs(settings.RaycastPaddingRight));
+        double maxVertical = Math.Max(Math.Abs(settings.RaycastPaddingBottom), Math.Abs(settings.RaycastPaddingTop));
+        return maxHorizontal > Math.Max(8d, targetWidth / 2d) || maxVertical > Math.Max(8d, targetHeight / 2d);
     }
 
     private sealed record AxisSegments(string Axis, double[] StopsPercent, double[] Sizes, double TotalPixels);

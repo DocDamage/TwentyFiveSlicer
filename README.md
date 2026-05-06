@@ -201,14 +201,16 @@ The desktop app preserves the important behavior from the Unity package:
 
 - Backward-compatible loading of legacy 4-border Unity JSON using `verticalBorders` and `horizontalBorders`.
 - Schema version 2 variable-grid save format using `xGuidesPercent`, `yGuidesPercent`, `xSegments`, and `ySegments`.
+- Automatic sprite-region detection from raw textures when no Unity sprite sidecar is present, including opaque-background fallback detection for flat sprite sheets, a minimum-region noise filter, and visual thumbnails for multiple detected regions.
 - Arbitrary X/Y guide authoring up to the desktop safety cap instead of a fixed 5x5 layout.
 - Per-guide X/Y coordinate editing through dynamic guide lists, percent entry, nudging, and preview dragging.
 - Per-cell freeform source and target rect overrides layered on top of the shared guide model.
 - Per-axis segment modes for every region boundary: `fixed`, `stretch`, and `hidden`.
 - Fixed-region scaling when the output target is smaller than the fixed edge total.
+- Unity target profiles for `spriteAsset`, `TwentyFiveSliceImage`, `TwentyFiveSliceSpriteRenderer`, and `SpriteRenderer`, with profile-aware defaults, summaries, and validation warnings.
 - Flip X/Y, debug overlay, source guide comparison, and PNG preview export.
 - Direct guide dragging, including intersection handles that move vertical and horizontal guides together, plus click-to-select rendered preview cells.
-- Preview zoom from 50% to 200%, including slider, mouse wheel, quick zoom buttons, zoomed-preview panning, and 100% reset.
+- Preview zoom from 50% to 500%, including slider, mouse wheel, quick zoom buttons, zoomed-preview panning, and 100% reset.
 
 ### Desktop Authoring Features
 
@@ -217,6 +219,8 @@ The desktop app preserves the important behavior from the Unity package:
 - Export rendered PNG previews, with optional debug overlay.
 - Edit borders with sliders, numeric fields, or direct preview guide dragging.
 - Click any rendered preview cell to sync the selected X and Y segment pair before editing per-cell overrides.
+- Raise or lower the raw-texture auto-detection noise floor and click visual region thumbnails before choosing which detected sprite to author against.
+- Switch Unity authoring profiles and apply recommended runtime defaults before exporting a handoff envelope back to Unity.
 - Undo and redo border/target-size changes.
 - Recent file restore and last-session persistence.
 - Built-in presets, user presets, candidate preview/apply workflow, and batch checks across common target sizes.

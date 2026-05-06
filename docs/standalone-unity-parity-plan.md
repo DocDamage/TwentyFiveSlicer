@@ -15,14 +15,16 @@ Bring the standalone desktop app to practical parity with the Unity package for 
 - Implemented:
   - desktop Unity runtime settings with session persistence, preview tinting, and runtime summaries
   - sprite sidecar ingestion with atlas rect, pivot, and pixels-per-unit metadata
+  - no-sidecar source loading that can auto-detect sprite regions from transparent or flat-background textures, filter out tiny noise regions, and let the desktop app switch between multiple detected candidates through labels or thumbnails
   - combined handoff-envelope import/export between Unity and the desktop app
   - Unity-side apply flow back into `SliceDataMap` and compatible selected components
   - desktop export-time preflight warnings that mirror Unity's fixed 25-slice importer constraints
   - desktop per-cell source/target rect overrides with direct preview cell picking
+  - desktop target profiles for `spriteAsset`, `TwentyFiveSliceImage`, `TwentyFiveSliceSpriteRenderer`, and `SpriteRenderer`
+  - profile-aware runtime defaults, runtime summaries, and target-specific validation warnings in the desktop app
 - Remaining:
-  - component-aware authoring presets and profiles in the desktop app
-  - broader validation parity beyond handoff compatibility warnings
   - richer project-aware bridge workflows such as enumerating known Unity targets
+  - project-aware validation parity such as resolving real Unity targets, sorting layers, and component availability from exported project manifests
 
 ## Feature Areas
 
@@ -74,11 +76,15 @@ Bring the standalone desktop app to practical parity with the Unity package for 
 - Make the desktop app understand the difference between:
   - TwentyFiveSliceImage
   - TwentyFiveSliceSpriteRenderer
+  - SpriteRenderer
 - Show component-specific summaries and warnings.
 - Add profile presets for common Unity targets:
   - UI image authoring profile
-  - sprite renderer authoring profile
+  - 25-slice sprite renderer authoring profile
+  - plain sprite renderer bridge profile
 - Carry component metadata through the bridge so the Unity side can apply it safely.
+- Status:
+  - implemented in the desktop app through the runtime-panel profile selector, recommended-default presets, and profile-aware summary/validation surfaces
 - Validation:
   - tests for component profile round-trip and expected defaults
 
@@ -93,6 +99,8 @@ Bring the standalone desktop app to practical parity with the Unity package for 
 - Surface both preview-impacting issues and Unity-handoff issues separately.
 - Status:
   - desktop handoff export now warns when Unity will reject the envelope because the layout no longer matches the fixed 25-slice subset
+  - desktop validation now warns about suspicious runtime metadata and target-specific fields that Unity will ignore for the selected authoring profile
+  - raw-texture sprite auto-detection now has a minimum connected-pixel filter to suppress tiny fragments before authoring begins
 - Validation:
   - focused service tests for each warning path
 
@@ -135,10 +143,10 @@ Bring the standalone desktop app to practical parity with the Unity package for 
 
 ### Phase 4
 - Add component-aware presets, validation, and apply workflows.
-- Status: next major slice.
+- Status: implemented for desktop-side target profiles, recommended defaults, runtime summaries, and validation warnings.
 
 ## Next Recommended Slice
-- Implement Phase 4 component-aware authoring:
-  - desktop-side target profiles for `TwentyFiveSliceImage` and `TwentyFiveSliceSpriteRenderer`
-  - profile-aware defaults and warnings in the runtime summary/validation surfaces
-  - focused tests for profile selection, defaults, and round-trip target metadata behavior
+- Extend the bridge into project-aware target discovery:
+  - export Unity project manifests that enumerate known compatible targets and sorting layers
+  - let the desktop app pick from real Unity targets instead of only generic target kinds
+  - validate handoff envelopes against project-specific availability before export/apply

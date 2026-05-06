@@ -6,6 +6,9 @@ public readonly record struct PreviewViewport(Rect PreviewRect, double PanX, dou
 
 public static class PreviewViewportCalculator
 {
+    public const double MinPreviewZoom = 0.5d;
+    public const double MaxPreviewZoom = 5d;
+
     public static PreviewViewport Calculate(
         Rect availableRect,
         double targetWidth,
@@ -22,7 +25,7 @@ public static class PreviewViewportCalculator
             scale = 1d;
         }
 
-        scale *= Math.Clamp(previewZoom, 0.5d, 2d);
+        scale *= Math.Clamp(previewZoom, MinPreviewZoom, MaxPreviewZoom);
         double width = safeTargetWidth * scale;
         double height = safeTargetHeight * scale;
         double panX = ClampPan(requestedPanX, width, availableRect.Width);

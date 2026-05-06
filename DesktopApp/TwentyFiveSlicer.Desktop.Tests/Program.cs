@@ -28,6 +28,7 @@ var tests = new (string Name, Action Test)[]
     ("Preview control export bitmap encodes as PNG", PreviewControlExportBitmapEncodesAsPng),
     ("Preview control applies Unity tint", PreviewControlAppliesUnityTint),
     ("Preview control clamps zoom", PreviewControlClampsZoomValue),
+    ("Preview control clips zoomed render to viewport", PreviewControlClipsZoomedRenderToViewport),
     ("Preview control adjusts zoom from mouse wheel", PreviewControlAdjustsZoomFromMouseWheel),
     ("Preview control resets zoom", PreviewControlResetsZoomValue),
     ("Preview control accepts variable guide selection", PreviewControlAcceptsVariableGuideSelection),
@@ -39,22 +40,34 @@ var tests = new (string Name, Action Test)[]
     ("SliceGuideInteraction converts point to guide percent", SliceGuideInteractionConvertsPointToGuidePercent),
     ("SliceCellInteraction detects rendered cells", SliceCellInteractionDetectsRenderedCells),
     ("Slice data JSON stays Unity compatible", SliceDataJsonStaysUnityCompatible),
+    ("Sprite region detector finds largest transparent component", SpriteRegionDetectorFindsLargestTransparentComponent),
+    ("Sprite region detector finds opaque background component", SpriteRegionDetectorFindsOpaqueBackgroundComponent),
+    ("Sprite resolver auto-detects primary sprite without sidecar", SpriteResolverAutoDetectsPrimarySpriteWithoutSidecar),
+    ("Sprite resolver returns ordered auto-detected candidates", SpriteResolverReturnsOrderedAutoDetectedCandidates),
+    ("Sprite resolver filters small auto-detected candidates", SpriteResolverFiltersSmallAutoDetectedCandidates),
     ("Sprite sidecar crops atlas using Unity coordinates", SpriteSidecarCropsAtlasUsingUnityCoordinates),
     ("Sprite sidecar falls back to preferred context", SpriteSidecarFallsBackToPreferredContext),
     ("Sprite sidecar can prefer provided context over sidecar", SpriteSidecarCanPreferProvidedContextOverSidecar),
+    ("Sprite sidecar ignores malformed JSON", SpriteSidecarIgnoresMalformedJson),
     ("Desktop handoff export round trips target metadata", DesktopHandoffEnvelopeExportRoundTripsTargetMetadata),
     ("Desktop handoff envelope imports and resolves texture path", DesktopHandoffEnvelopeImportsAndResolvesTexturePath),
+    ("Desktop handoff envelope rejects malformed JSON", DesktopHandoffEnvelopeRejectsMalformedJson),
     ("Desktop handoff preflight flags Unity-incompatible grids", DesktopHandoffPreflightFlagsUnityIncompatibleGrids),
+    ("Unity target profile catalog applies image defaults", UnityTargetProfileCatalogAppliesImageDefaults),
+    ("Unity runtime summary uses image profile", UnityRuntimeSummaryUsesImageProfile),
     ("Unity runtime summary uses imported sprite pivot", UnityRuntimeSummaryUsesImportedSpritePivot),
     ("Unity runtime summary falls back to imported sprite size", UnityRuntimeSummaryFallsBackToImportedSpriteSize),
     ("SliceValidation warns when fixed columns exceed target width", SliceValidationWarnsWhenFixedColumnsExceedTargetWidth),
     ("SliceValidation warns for variable grid hazards", SliceValidationWarnsForVariableGridHazards),
+    ("SliceValidation warns when renderer profile uses raycast metadata", SliceValidationWarnsWhenRendererProfileUsesRaycastMetadata),
+    ("SliceValidation warns when custom pivot exceeds source bounds", SliceValidationWarnsWhenCustomPivotExceedsSourceBounds),
     ("RecentFileList keeps newest unique files first", RecentFileListKeepsNewestUniqueFilesFirst),
     ("BatchPreviewAnalyzer returns warnings per target", BatchPreviewAnalyzerReturnsWarningsPerTarget),
     ("ImageBorderSuggestionService detects transparent padding", ImageBorderSuggestionServiceDetectsTransparentPadding),
     ("SliceAssistant applies natural language edits", SliceAssistantAppliesNaturalLanguageEdits),
     ("SliceHistory ignores duplicate pushed states", SliceHistoryIgnoresDuplicatePushedStates),
     ("AppStateStore round trips recent files and presets", AppStateStoreRoundTripsRecentFilesAndPresets),
+    ("AppStateStore ignores malformed JSON", AppStateStoreIgnoresMalformedJson),
     ("SliceAssistant analyzes current slice warnings", SliceAssistantAnalyzesCurrentSliceWarnings),
     ("SliceAssistant returns structured recommendations", SliceAssistantReturnsStructuredRecommendations),
     ("ImageBorderSuggestionService explains confidence", ImageBorderSuggestionServiceExplainsConfidence),
@@ -83,6 +96,7 @@ var tests = new (string Name, Action Test)[]
     ("CloudAiClient reports HTTP failures", CloudAiClientReportsHttpFailures),
     ("CloudAiClient reports missing API key", CloudAiClientReportsMissingApiKey),
     ("CloudAiSecretStore protects API keys at rest", CloudAiSecretStoreProtectsApiKeysAtRest),
+    ("CloudAiSecretStore recovers from malformed file", CloudAiSecretStoreRecoversFromMalformedFile),
     ("CloudAiRequestBuilder resolves secure stored keys", CloudAiRequestBuilderResolvesSecureStoredKeys),
     ("CloudAiClient uses secure stored keys", CloudAiClientUsesSecureStoredKeys),
     ("CloudAiAdviceParser extracts JSON border suggestions", CloudAiAdviceParserExtractsJsonBorderSuggestions),
@@ -505,6 +519,12 @@ static void MainWindowExposesSpriteContextSummary()
 
     Assert.True(xaml.Contains("x:Name=\"SpriteContextText\"", StringComparison.Ordinal), "Main window should expose sprite sidecar summary text in the source card.");
     Assert.True(xaml.Contains("No sprite sidecar loaded.", StringComparison.Ordinal), "Source card should explain the no-sidecar fallback state.");
+    Assert.True(xaml.Contains("x:Name=\"DetectedSpriteRegionsComboBox\"", StringComparison.Ordinal), "Source card should expose a detected-region picker for auto-detected sprite sheets.");
+    Assert.True(xaml.Contains("SelectionChanged=\"DetectedSpriteRegionsComboBox_SelectionChanged\"", StringComparison.Ordinal), "Detected-region picker should switch the active sprite region when the selection changes.");
+    Assert.True(xaml.Contains("x:Name=\"DetectedSpriteRegionFilterComboBox\"", StringComparison.Ordinal), "Source card should expose a minimum detected-region filter control.");
+    Assert.True(xaml.Contains("SelectionChanged=\"DetectedSpriteRegionFilterComboBox_SelectionChanged\"", StringComparison.Ordinal), "Detected-region filter changes should refresh raw-texture auto-detection.");
+    Assert.True(xaml.Contains("x:Name=\"DetectedSpriteRegionThumbnailsListBox\"", StringComparison.Ordinal), "Source card should expose detected-region thumbnails for visual switching.");
+    Assert.True(xaml.Contains("SelectionChanged=\"DetectedSpriteRegionThumbnailsListBox_SelectionChanged\"", StringComparison.Ordinal), "Detected-region thumbnails should switch the active sprite region when selected.");
 }
 
 static void MainWindowExposesUnityRuntimeControls()
@@ -514,6 +534,9 @@ static void MainWindowExposesUnityRuntimeControls()
 
     Assert.True(xaml.Contains("Text=\"Unity Runtime\"", StringComparison.Ordinal), "Main window should expose Unity runtime controls.");
     Assert.True(xaml.Contains("x:Name=\"UnityRuntimeSummaryText\"", StringComparison.Ordinal), "Main window should show a Unity runtime summary.");
+    Assert.True(xaml.Contains("x:Name=\"TargetProfileComboBox\"", StringComparison.Ordinal), "Main window should expose a Unity target profile selector.");
+    Assert.True(xaml.Contains("x:Name=\"TargetProfileHintText\"", StringComparison.Ordinal), "Main window should describe the active Unity target profile.");
+    Assert.True(xaml.Contains("Click=\"ApplyTargetProfileDefaults_Click\"", StringComparison.Ordinal), "Main window should let users apply recommended defaults for the active Unity target profile.");
     Assert.True(xaml.Contains("x:Name=\"UnityTintTextBox\"", StringComparison.Ordinal), "Main window should expose a Unity tint field.");
     Assert.True(xaml.Contains("x:Name=\"PixelsPerUnitTextBox\"", StringComparison.Ordinal), "Main window should expose a pixels-per-unit field.");
     Assert.True(xaml.Contains("x:Name=\"UseSpritePivotCheckBox\"", StringComparison.Ordinal), "Main window should expose sprite pivot toggle controls.");
@@ -951,13 +974,43 @@ static void PreviewControlClampsZoomValue()
         var preview = new TwentyFiveSlicePreviewControl();
 
         preview.PreviewZoom = 0.1d;
-        Assert.Equal(0.5d, preview.PreviewZoom, "Preview zoom should not go below the Unity editor minimum.");
+        Assert.Equal(PreviewViewportCalculator.MinPreviewZoom, preview.PreviewZoom, "Preview zoom should not go below the desktop minimum.");
 
-        preview.PreviewZoom = 2.8d;
-        Assert.Equal(2d, preview.PreviewZoom, "Preview zoom should not exceed the Unity editor maximum.");
+        preview.PreviewZoom = 6d;
+        Assert.Equal(PreviewViewportCalculator.MaxPreviewZoom, preview.PreviewZoom, "Preview zoom should not exceed the desktop maximum.");
 
         preview.PreviewZoom = 1.35d;
         Assert.Equal(1.35d, preview.PreviewZoom, "Preview zoom should preserve valid zoom values.");
+    });
+}
+
+static void PreviewControlClipsZoomedRenderToViewport()
+{
+    RunOnStaThread(() =>
+    {
+        var preview = new TwentyFiveSlicePreviewControl
+        {
+            Width = 220d,
+            Height = 140d,
+            SourceImage = CreateSolidBitmap(16, 16, Colors.White),
+            SliceData = new TwentyFiveSliceData([25d, 40d, 60d, 75d], [25d, 40d, 60d, 75d]),
+            TargetWidth = 64d,
+            TargetHeight = 64d,
+            PreviewZoom = PreviewViewportCalculator.MaxPreviewZoom
+        };
+
+        preview.Measure(new Size(220d, 140d));
+        preview.Arrange(new Rect(0d, 0d, 220d, 140d));
+        preview.UpdateLayout();
+
+        var bitmap = new RenderTargetBitmap(220, 140, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(preview);
+
+        Color outsideViewport = ReadPixel(bitmap, 10, 70);
+        Color insideViewport = ReadPixel(bitmap, 110, 70);
+
+        Assert.Equal(Color.FromArgb(255, 12, 17, 22), outsideViewport, "Zoomed rendering should stay clipped inside the preview viewport.");
+        Assert.True(insideViewport.R > 200 && insideViewport.G > 200 && insideViewport.B > 200, "The zoomed preview should still render visible image content inside the viewport.");
     });
 }
 
@@ -1204,6 +1257,52 @@ static void SpriteSidecarCanPreferProvidedContextOverSidecar()
     }
 }
 
+static void SpriteSidecarIgnoresMalformedJson()
+{
+    string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    string imagePath = Path.Combine(directory, "atlas.png");
+    string sidecarPath = Path.Combine(directory, "atlas.png.sprite.json");
+
+    try
+    {
+        File.WriteAllBytes(imagePath, EncodePng(CreateQuadrantBitmap(4, 4, Colors.Blue, Colors.White, Colors.Red, Colors.Green)));
+        File.WriteAllText(sidecarPath, "{ not valid json }");
+
+        SpriteSourceLoadResult result = SpriteAssetContextResolver.Load(imagePath, new SpriteAssetContext
+        {
+            SpriteName = "GreenButton",
+            CoordinateOrigin = "top-left",
+            PixelsPerUnit = 48d,
+            SpriteRect = new SpritePixelRect
+            {
+                X = 2,
+                Y = 2,
+                Width = 2,
+                Height = 2
+            },
+            PivotPixels = new SpritePixelPoint
+            {
+                X = 1d,
+                Y = 1d
+            }
+        });
+
+        Color pixel = ReadPixel(result.SourceImage, 0, 0);
+
+        Assert.True(result.Context is not null, "Malformed sidecar JSON should fall back to the preferred sprite context.");
+        Assert.Equal("GreenButton", result.Context!.SpriteName, "Preferred sprite context should still be applied when the sidecar is malformed.");
+        Assert.True(pixel.G > 100 && pixel.R < 20 && pixel.B < 20, "Fallback sprite rect should still crop the expected region.");
+    }
+    finally
+    {
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+}
+
 static void DesktopHandoffEnvelopeImportsAndResolvesTexturePath()
 {
     string projectRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -1360,6 +1459,30 @@ static void DesktopHandoffEnvelopeExportRoundTripsTargetMetadata()
     }
 }
 
+static void DesktopHandoffEnvelopeRejectsMalformedJson()
+{
+    string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    string envelopePath = Path.Combine(directory, "broken.25slice.handoff.json");
+
+    try
+    {
+        File.WriteAllText(envelopePath, "{ invalid json }");
+
+        Assert.True(!DesktopHandoffEnvelopeService.LooksLikeEnvelope("{ invalid json }"), "Envelope detection should reject malformed JSON instead of throwing.");
+        Assert.Throws<InvalidDataException>(
+            () => DesktopHandoffEnvelopeService.Import(envelopePath),
+            "Malformed envelope JSON should surface as invalid data.");
+    }
+    finally
+    {
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+}
+
 static void DesktopHandoffPreflightFlagsUnityIncompatibleGrids()
 {
     var data = new TwentyFiveSliceData(
@@ -1405,6 +1528,81 @@ static void DesktopHandoffPreflightFlagsUnityIncompatibleGrids()
     Assert.Contains(report.Issues, issue => issue.Contains("X segment layouts with 5 entries", StringComparison.Ordinal));
     Assert.Contains(report.Issues, issue => issue.Contains("default 25-slice Y segment pattern", StringComparison.Ordinal));
     Assert.Contains(report.Issues, issue => issue.Contains("per-cell freeform overrides", StringComparison.OrdinalIgnoreCase));
+}
+
+static void UnityTargetProfileCatalogAppliesImageDefaults()
+{
+    UnityRuntimeSettings settings = UnityTargetProfileCatalog.ApplyRecommendedDefaults(
+        UnityTargetProfileCatalog.TwentyFiveSliceImageKind,
+        new UnityRuntimeSettings
+        {
+            TintHex = "#FF112233",
+            PixelsPerUnit = 12d,
+            UseSpritePivot = false,
+            CustomPivotX = 4d,
+            CustomPivotY = 5d,
+            SortingLayerName = "Foreground",
+            SortingOrder = 8,
+            MaterialName = "UI/Glow",
+            RaycastTarget = false,
+            RaycastPaddingLeft = 3d,
+            RaycastPaddingBottom = 2d,
+            RaycastPaddingRight = 1d,
+            RaycastPaddingTop = 4d
+        },
+        new SpriteAssetContext
+        {
+            PixelsPerUnit = 64d
+        });
+
+    Assert.Equal("#FF112233", settings.TintHex, "Profile defaults should preserve the selected tint.");
+    Assert.Equal(64d, settings.PixelsPerUnit, "Image defaults should seed pixels per unit from sprite metadata when available.");
+    Assert.True(settings.UseSpritePivot, "Image defaults should prefer the imported sprite pivot.");
+    Assert.Equal(0d, settings.CustomPivotX, "Image defaults should clear custom pivot X.");
+    Assert.Equal(0d, settings.CustomPivotY, "Image defaults should clear custom pivot Y.");
+    Assert.Equal("Default", settings.SortingLayerName, "Image defaults should reset sorting metadata to a neutral default.");
+    Assert.Equal(0, settings.SortingOrder, "Image defaults should reset sorting order.");
+    Assert.Equal(string.Empty, settings.MaterialName, "Image defaults should clear custom material overrides.");
+    Assert.True(settings.RaycastTarget, "Image defaults should enable raycast handling by default.");
+    Assert.Equal(0d, settings.RaycastPaddingLeft, "Image defaults should clear raycast padding.");
+}
+
+static void UnityRuntimeSummaryUsesImageProfile()
+{
+    string summary = UnityRuntimeSettingsSummaryService.Build(
+        new UnityRuntimeSettings
+        {
+            MaterialName = "UI/Outlined",
+            RaycastTarget = true
+        },
+        CreateSolidBitmap(32, 16, Colors.White),
+        new SpriteAssetContext
+        {
+            SpriteName = "Button",
+            TextureWidth = 64,
+            TextureHeight = 32,
+            CoordinateOrigin = "top-left",
+            SpriteRect = new SpritePixelRect
+            {
+                X = 16,
+                Y = 8,
+                Width = 32,
+                Height = 16
+            },
+            PivotPixels = new SpritePixelPoint
+            {
+                X = 4d,
+                Y = 6d
+            },
+            PixelsPerUnit = 32d
+        },
+        128d,
+        64d,
+        UnityTargetProfileCatalog.TwentyFiveSliceImageKind);
+
+    Assert.True(summary.Contains("TwentyFiveSliceImage", StringComparison.Ordinal), "Image profile summary should use the image target label.");
+    Assert.True(summary.Contains("128 x 64 UI pixels", StringComparison.Ordinal), "Image profile summary should describe UI pixel output instead of only world units.");
+    Assert.True(summary.Contains("raycast on", StringComparison.OrdinalIgnoreCase), "Image profile summary should keep the UI raycast metadata visible.");
 }
 
 static void UnityRuntimeSummaryUsesImportedSpritePivot()
@@ -1487,14 +1685,16 @@ static void PreviewViewportClampsPanToVisibleOverflow()
         availableRect,
         targetWidth: 100d,
         targetHeight: 50d,
-        previewZoom: 2d,
-        requestedPanX: 150d,
-        requestedPanY: -90d);
+        previewZoom: PreviewViewportCalculator.MaxPreviewZoom,
+        requestedPanX: 450d,
+        requestedPanY: -350d);
 
-    Assert.Equal(100d, viewport.PanX, "Horizontal pan should clamp to half of the zoomed overflow.");
-    Assert.Equal(-50d, viewport.PanY, "Vertical pan should clamp to half of the zoomed overflow.");
+    Assert.Equal(400d, viewport.PanX, "Horizontal pan should clamp to half of the zoomed overflow.");
+    Assert.Equal(-200d, viewport.PanY, "Vertical pan should clamp to half of the zoomed overflow.");
+    Assert.Equal(1000d, viewport.PreviewRect.Width, "Viewport sizing should support the full 500% zoom range.");
+    Assert.Equal(500d, viewport.PreviewRect.Height, "Viewport sizing should support the full 500% zoom range.");
     Assert.Equal(10d, viewport.PreviewRect.X, "Preview rect should include clamped horizontal pan.");
-    Assert.Equal(-80d, viewport.PreviewRect.Y, "Preview rect should include clamped vertical pan.");
+    Assert.Equal(-380d, viewport.PreviewRect.Y, "Preview rect should include clamped vertical pan.");
 
     PreviewViewport fittingViewport = PreviewViewportCalculator.Calculate(
         availableRect,
@@ -1578,6 +1778,152 @@ static void SliceDataJsonStaysUnityCompatible()
     Assert.SequenceEqual(data.HorizontalBorders, loaded.HorizontalBorders);
 }
 
+static void SpriteRegionDetectorFindsLargestTransparentComponent()
+{
+    BitmapSource bitmap = CreateRectBitmap(
+        10,
+        8,
+        Colors.Transparent,
+        (1, 1, 2, 2, Colors.Red),
+        (5, 2, 4, 4, Colors.Lime));
+
+    DetectedSpriteRegion? region = SpriteRegionDetectionService.DetectPrimarySprite(bitmap);
+
+    Assert.True(region is not null, "Detector should find a foreground component in transparent images.");
+    Assert.Equal(SpriteRegionSegmentationMode.AlphaThreshold, region!.SegmentationMode, "Transparent images should use alpha-based segmentation.");
+    Assert.Equal(5, region.Bounds.X, "Detector should choose the larger connected component.");
+    Assert.Equal(2, region.Bounds.Y, "Detector should preserve the connected component Y origin.");
+    Assert.Equal(4, region.Bounds.Width, "Detector should preserve the connected component width.");
+    Assert.Equal(4, region.Bounds.Height, "Detector should preserve the connected component height.");
+    Assert.Equal(16, region.PixelCount, "Detector should count foreground pixels inside the connected component.");
+}
+
+static void SpriteRegionDetectorFindsOpaqueBackgroundComponent()
+{
+    BitmapSource bitmap = CreateRectBitmap(
+        8,
+        8,
+        Color.FromRgb(16, 24, 32),
+        (2, 1, 4, 5, Colors.Gold));
+
+    DetectedSpriteRegion? region = SpriteRegionDetectionService.DetectPrimarySprite(bitmap);
+
+    Assert.True(region is not null, "Detector should find a foreground component in opaque images with a contrasting background.");
+    Assert.Equal(SpriteRegionSegmentationMode.BackgroundColor, region!.SegmentationMode, "Opaque images should fall back to background-color segmentation.");
+    Assert.Equal("#101820", region.BackgroundColorHex, "Detector should expose the inferred opaque background color.");
+    Assert.Equal(2, region.Bounds.X, "Detector should preserve the foreground X origin.");
+    Assert.Equal(1, region.Bounds.Y, "Detector should preserve the foreground Y origin.");
+    Assert.Equal(4, region.Bounds.Width, "Detector should preserve the foreground width.");
+    Assert.Equal(5, region.Bounds.Height, "Detector should preserve the foreground height.");
+}
+
+static void SpriteResolverAutoDetectsPrimarySpriteWithoutSidecar()
+{
+    string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    string imagePath = Path.Combine(directory, "sheet.png");
+
+    try
+    {
+        File.WriteAllBytes(
+            imagePath,
+            EncodePng(CreateRectBitmap(
+                10,
+                8,
+                Colors.Transparent,
+                (1, 1, 2, 2, Colors.Red),
+                (5, 2, 4, 4, Colors.Lime))));
+
+        SpriteSourceLoadResult result = SpriteAssetContextResolver.Load(imagePath);
+        Color pixel = ReadPixel(result.SourceImage, 0, 0);
+
+        Assert.True(result.Context is not null, "Resolver should synthesize sprite context when no sidecar or preferred context exists.");
+        Assert.Equal(SpriteRegionDetectionService.AutoDetectedSpriteName, result.Context!.SpriteName, "Resolver should label synthesized sprite context as auto-detected.");
+        Assert.Equal(5, result.Context.SpriteRect.X, "Resolver should use the detected foreground X origin.");
+        Assert.Equal(2, result.Context.SpriteRect.Y, "Resolver should use the detected foreground Y origin.");
+        Assert.Equal(4, result.Context.SpriteRect.Width, "Resolver should use the detected foreground width.");
+        Assert.Equal(4, result.Context.SpriteRect.Height, "Resolver should use the detected foreground height.");
+        Assert.Equal(4, result.SourceImage.PixelWidth, "Resolver should crop the source image to the detected sprite width.");
+        Assert.Equal(4, result.SourceImage.PixelHeight, "Resolver should crop the source image to the detected sprite height.");
+        Assert.True(pixel.G > 200 && pixel.R < 20 && pixel.B < 20, "Resolver crop should target the detected lime sprite region.");
+    }
+    finally
+    {
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+}
+
+static void SpriteResolverReturnsOrderedAutoDetectedCandidates()
+{
+    string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    string imagePath = Path.Combine(directory, "sheet.png");
+
+    try
+    {
+        File.WriteAllBytes(
+            imagePath,
+            EncodePng(CreateRectBitmap(
+                12,
+                10,
+                Colors.Transparent,
+                (1, 1, 2, 2, Colors.Red),
+                (0, 6, 2, 3, Colors.Blue),
+                (6, 2, 4, 4, Colors.Lime))));
+
+        SpriteSourceLoadResult result = SpriteAssetContextResolver.Load(imagePath);
+
+        Assert.Equal(3, result.AutoDetectedCandidates.Count, "Resolver should surface all detected sprite candidates so the UI can switch between them.");
+        Assert.Equal(6, result.AutoDetectedCandidates[0].SpriteRect.X, "Largest detected candidate should be ordered first.");
+        Assert.Equal(0, result.AutoDetectedCandidates[1].SpriteRect.X, "Second-largest detected candidate should be ordered next.");
+        Assert.Equal(1, result.AutoDetectedCandidates[2].SpriteRect.X, "Smaller detected candidates should still remain selectable.");
+    }
+    finally
+    {
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+}
+
+static void SpriteResolverFiltersSmallAutoDetectedCandidates()
+{
+    string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    string imagePath = Path.Combine(directory, "sheet.png");
+
+    try
+    {
+        File.WriteAllBytes(
+            imagePath,
+            EncodePng(CreateRectBitmap(
+                12,
+                10,
+                Colors.Transparent,
+                (1, 1, 1, 1, Colors.Red),
+                (0, 6, 2, 2, Colors.Blue),
+                (6, 2, 4, 4, Colors.Lime))));
+
+        SpriteSourceLoadResult result = SpriteAssetContextResolver.Load(imagePath, minimumAutoDetectedRegionPixelCount: 5);
+
+        Assert.Equal(1, result.AutoDetectedCandidates.Count, "Resolver should filter out tiny detected regions when a minimum connected-pixel threshold is applied.");
+        Assert.True(result.Context is not null, "Resolver should still select the best remaining candidate after filtering.");
+        Assert.Equal(6, result.Context!.SpriteRect.X, "Resolver should keep the large candidate when smaller ones are filtered out.");
+        Assert.Equal(2, result.Context.SpriteRect.Y, "Resolver should preserve the surviving candidate origin after filtering.");
+    }
+    finally
+    {
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+}
+
 static void SliceValidationWarnsWhenFixedColumnsExceedTargetWidth()
 {
     var data = new TwentyFiveSliceData([35d, 45d, 55d, 65d], [20d, 40d, 60d, 80d]);
@@ -1618,6 +1964,47 @@ static void SliceValidationWarnsForVariableGridHazards()
     Assert.Contains(messages, message => message.Text.Contains("X segment 0", StringComparison.OrdinalIgnoreCase) && message.Text.Contains("0.5px", StringComparison.OrdinalIgnoreCase));
     Assert.Contains(messages, message => message.Text.Contains("X guide 1", StringComparison.OrdinalIgnoreCase) && message.Text.Contains("source edge", StringComparison.OrdinalIgnoreCase));
     Assert.Contains(messages, message => message.Text.Contains("6 x 6", StringComparison.OrdinalIgnoreCase));
+}
+
+static void SliceValidationWarnsWhenRendererProfileUsesRaycastMetadata()
+{
+    var data = TwentyFiveSliceData.CreateDefault();
+
+    IReadOnlyList<SliceValidationMessage> messages = SliceValidationService.Validate(
+        sourceWidth: 100d,
+        sourceHeight: 100d,
+        targetWidth: 200d,
+        targetHeight: 200d,
+        data,
+        new UnityRuntimeSettings
+        {
+            RaycastTarget = true,
+            RaycastPaddingLeft = 12d
+        },
+        UnityTargetProfileCatalog.TwentyFiveSliceSpriteRendererKind);
+
+    Assert.Contains(messages, message => message.Text.Contains("ignores raycast target", StringComparison.OrdinalIgnoreCase));
+}
+
+static void SliceValidationWarnsWhenCustomPivotExceedsSourceBounds()
+{
+    var data = TwentyFiveSliceData.CreateDefault();
+
+    IReadOnlyList<SliceValidationMessage> messages = SliceValidationService.Validate(
+        sourceWidth: 64d,
+        sourceHeight: 32d,
+        targetWidth: 256d,
+        targetHeight: 128d,
+        data,
+        new UnityRuntimeSettings
+        {
+            UseSpritePivot = false,
+            CustomPivotX = 80d,
+            CustomPivotY = -40d
+        },
+        UnityTargetProfileCatalog.TwentyFiveSliceSpriteRendererKind);
+
+    Assert.Contains(messages, message => message.Text.Contains("outside the 64 x 32px source bounds", StringComparison.OrdinalIgnoreCase));
 }
 
 static void RecentFileListKeepsNewestUniqueFilesFirst()
@@ -1704,6 +2091,29 @@ static void AppStateStoreRoundTripsRecentFilesAndPresets()
         Assert.SequenceEqual(state.RecentFiles, loaded.RecentFiles);
         Assert.True(loaded.UserPresets.ContainsKey("Wide Button"), "User preset should round trip by name.");
         Assert.Equal(88d, loaded.UserPresets["Wide Button"].VerticalBorders[3], "Preset border values should round trip.");
+    }
+    finally
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+}
+
+static void AppStateStoreIgnoresMalformedJson()
+{
+    string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.json");
+    var store = new AppStateStore(path);
+
+    try
+    {
+        File.WriteAllText(path, "{ not valid json }");
+        DesktopAppState loaded = store.Load();
+
+        Assert.True(loaded.RecentFiles.Count == 0, "Malformed app-state JSON should fall back to a default empty state.");
+        Assert.True(loaded.UserPresets.Count == 0, "Malformed app-state JSON should not restore any presets.");
+        Assert.True(loaded.LastSession is null, "Malformed app-state JSON should not restore a stale session.");
     }
     finally
     {
@@ -2338,6 +2748,38 @@ static void CloudAiSecretStoreProtectsApiKeysAtRest()
     }
 }
 
+static void CloudAiSecretStoreRecoversFromMalformedFile()
+{
+    string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}-secrets.json");
+    CloudAiProviderDescriptor provider = CloudAiProviderCatalog.Find("openai")!;
+    var settings = new CloudAiSettings
+    {
+        ProviderId = "openai",
+        ApiKeyEnvironmentVariable = "TFS_TEST_MALFORMED_SECURE_STORE_KEY"
+    };
+
+    try
+    {
+        File.WriteAllText(path, "{ not valid json }");
+        var store = new CloudAiSecretStore(path, new TestSecretProtector());
+
+        Assert.True(!store.HasSecret(provider, settings), "Malformed secure-store JSON should be treated as an empty secret store.");
+        Assert.True(!store.TryGetSecret(provider, settings, out _), "Malformed secure-store JSON should not throw when reading secrets.");
+
+        store.SaveSecret(provider, settings, "recovered-secret-key");
+
+        Assert.True(store.TryGetSecret(provider, settings, out string apiKey), "Saving after malformed secure-store JSON should recover by overwriting the broken file.");
+        Assert.Equal("recovered-secret-key", apiKey, "Recovered secure-store save should persist a usable decrypted key.");
+    }
+    finally
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+}
+
 static void CloudAiRequestBuilderResolvesSecureStoredKeys()
 {
     Environment.SetEnvironmentVariable("TFS_TEST_SECURE_ONLY_KEY", null);
@@ -2812,6 +3254,40 @@ static BitmapSource CreateQuadrantBitmap(int width, int height, Color topLeft, C
     }
 
     return BitmapSource.Create(width, height, 96d, 96d, PixelFormats.Bgra32, null, pixels, width * 4);
+}
+
+static BitmapSource CreateRectBitmap(int width, int height, Color background, params (int X, int Y, int Width, int Height, Color Color)[] rectangles)
+{
+    var pixels = new byte[width * height * 4];
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            WritePixel(pixels, width, x, y, background);
+        }
+    }
+
+    foreach ((int x, int y, int rectWidth, int rectHeight, Color color) in rectangles)
+    {
+        for (int row = y; row < y + rectHeight; row++)
+        {
+            for (int column = x; column < x + rectWidth; column++)
+            {
+                WritePixel(pixels, width, column, row, color);
+            }
+        }
+    }
+
+    return BitmapSource.Create(width, height, 96d, 96d, PixelFormats.Bgra32, null, pixels, width * 4);
+}
+
+static void WritePixel(byte[] pixels, int width, int x, int y, Color color)
+{
+    int index = ((y * width) + x) * 4;
+    pixels[index] = color.B;
+    pixels[index + 1] = color.G;
+    pixels[index + 2] = color.R;
+    pixels[index + 3] = color.A;
 }
 
 static Color ReadPixel(BitmapSource bitmap, int x, int y)

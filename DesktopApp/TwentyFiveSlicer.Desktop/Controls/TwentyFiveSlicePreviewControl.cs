@@ -39,6 +39,7 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     private bool _guideEditingEnabled = true;
     private bool _showSourceGuides;
     private Rect _lastPreviewRect;
+    private Rect _lastViewportRect;
     private int _activeVerticalGuideIndex = -1;
     private int _activeHorizontalGuideIndex = -1;
     private int _selectedVerticalGuideIndex = -1;
@@ -153,7 +154,7 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         get => _previewZoom;
         set
         {
-            double zoom = Math.Round(Math.Clamp(value, 0.5d, 2d), 4);
+            double zoom = Math.Round(Math.Clamp(value, PreviewViewportCalculator.MinPreviewZoom, PreviewViewportCalculator.MaxPreviewZoom), 4);
             if (Math.Abs(_previewZoom - zoom) < 0.0001d)
             {
                 return;
@@ -295,6 +296,8 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
 
         if (_sourceImage is null)
         {
+            _lastPreviewRect = Rect.Empty;
+            _lastViewportRect = Rect.Empty;
             DrawEmptyState(drawingContext, fullRect);
             return;
         }
@@ -304,6 +307,8 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         var availableRect = new Rect(28d, 28d, Math.Max(0d, ActualWidth - 56d), Math.Max(0d, ActualHeight - 56d));
         if (availableRect.Width <= 0d || availableRect.Height <= 0d)
         {
+            _lastPreviewRect = Rect.Empty;
+            _lastViewportRect = Rect.Empty;
             return;
         }
 
@@ -328,7 +333,9 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         Rect previewRect = viewport.PreviewRect;
         double scale = previewRect.Width / safeTargetWidth;
         _lastPreviewRect = previewRect;
+        _lastViewportRect = availableRect;
 
+        drawingContext.PushClip(new RectangleGeometry(availableRect));
         DrawShadow(drawingContext, previewRect);
         DrawCheckerboard(drawingContext, previewRect, Math.Clamp(18d * scale, 8d, 34d));
 
@@ -347,13 +354,14 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
 
         drawingContext.DrawRectangle(null, FramePen, previewRect);
         DrawPreviewLabel(drawingContext, previewRect, scale);
+        drawingContext.Pop();
     }
 
     protected override void OnMouseDown(System.Windows.Input.MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
         Point point = e.GetPosition(this);
-        if (_sourceImage is null || !_lastPreviewRect.Contains(point))
+        if (_sourceImage is null || _lastViewportRect.IsEmpty || !_lastViewportRect.Contains(point))
         {
             return;
         }
@@ -477,6 +485,11 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
 
     private SliceGuideHit HitTestGuide(Point point)
     {
+        if (_lastViewportRect.IsEmpty || !_lastViewportRect.Contains(point))
+        {
+            return SliceGuideHit.None;
+        }
+
         return GuideEditingEnabled
             ? SliceGuideInteraction.HitTest(_lastPreviewRect, SliceData, point)
             : SliceGuideHit.None;
@@ -484,7 +497,7 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
 
     private SliceCellHit HitTestCell(Point point)
     {
-        if (_sourceImage is null || _lastPreviewRect.IsEmpty)
+        if (_sourceImage is null || _lastPreviewRect.IsEmpty || _lastViewportRect.IsEmpty || !_lastViewportRect.Contains(point))
         {
             return SliceCellHit.None;
         }
@@ -553,7 +566,7 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
 
     private void UpdatePointer(Point point)
     {
-        if (_lastPreviewRect.IsEmpty || !_lastPreviewRect.Contains(point))
+        if (_lastPreviewRect.IsEmpty || _lastViewportRect.IsEmpty || !_lastViewportRect.Contains(point))
         {
             return;
         }

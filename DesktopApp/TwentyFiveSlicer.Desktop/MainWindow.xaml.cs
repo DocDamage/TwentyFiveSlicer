@@ -27,6 +27,23 @@ public partial class MainWindow : Window
         WriteIndented = true
     };
 
+    private sealed record DetectedSpriteRegionFilterOption(int PixelCount, string Label);
+
+    private sealed record DetectedSpriteRegionThumbnailItem(BitmapSource Thumbnail, string Label);
+
+    private static readonly DetectedSpriteRegionFilterOption[] DetectedSpriteRegionFilterOptions =
+    [
+        new(1, "Noise off"),
+        new(4, "4 px"),
+        new(8, "8 px"),
+        new(16, "16 px"),
+        new(32, "32 px"),
+        new(64, "64 px"),
+        new(128, "128 px"),
+        new(256, "256 px"),
+        new(512, "512 px")
+    ];
+
     private double[] _verticalBorders = { 20d, 40d, 60d, 80d };
     private double[] _horizontalBorders = { 20d, 40d, 60d, 80d };
     private SliceSegmentDefinition[] _xSegments = TwentyFiveSliceData.NormalizeSegments(null, 5);
@@ -46,6 +63,7 @@ public partial class MainWindow : Window
     private readonly CloudAiSecretStore _cloudAiSecretStore = CloudAiSecretStore.CreateDefault();
     private readonly IReadOnlyList<CloudAiProviderDescriptor> _cloudAiProviders = CloudAiProviderCatalog.GetAll();
     private readonly CloudAiClient _cloudAiClient;
+    private readonly IReadOnlyList<UnityTargetProfileDescriptor> _targetProfiles = UnityTargetProfileCatalog.GetAll();
     private readonly Dictionary<string, TwentyFiveSliceData> _presetLibrary = new()
     {
         ["Preset: Default"] = TwentyFiveSliceData.CreateDefault(),
@@ -55,9 +73,12 @@ public partial class MainWindow : Window
     };
     private SliceHistory? _history;
 
+    private BitmapSource? _sourceTexture;
     private BitmapSource? _sourceImage;
     private string? _imagePath;
     private SpriteAssetContext? _spriteAssetContext;
+    private IReadOnlyList<SpriteAssetContext> _autoDetectedSpriteCandidates = [];
+    private int _minimumDetectedRegionPixelCount = SpriteRegionDetectionService.DefaultMinimumPixelCount;
     private string _handoffTargetKind = DesktopHandoffEnvelope.DefaultTargetKind;
     private string _handoffTargetName = string.Empty;
     private SliceAssistantAnalysis? _lastAssistantAnalysis;
@@ -90,12 +111,17 @@ public partial class MainWindow : Window
         _horizontalTextBoxes = [Horizontal1TextBox, Horizontal2TextBox, Horizontal3TextBox, Horizontal4TextBox];
         CloudAiProviderComboBox.ItemsSource = _cloudAiProviders;
         CloudAiProviderComboBox.SelectedValuePath = nameof(CloudAiProviderDescriptor.Id);
+        DetectedSpriteRegionFilterComboBox.ItemsSource = DetectedSpriteRegionFilterOptions;
+        DetectedSpriteRegionFilterComboBox.SelectedValue = _minimumDetectedRegionPixelCount;
+        TargetProfileComboBox.ItemsSource = _targetProfiles;
+        TargetProfileComboBox.DisplayMemberPath = nameof(UnityTargetProfileDescriptor.DisplayName);
         ChatMessagesListBox.ItemsSource = _chatMessages;
         XSegmentModeComboBox.ItemsSource = Enum.GetValues<SliceSegmentMode>();
         YSegmentModeComboBox.ItemsSource = Enum.GetValues<SliceSegmentMode>();
         PreviewControl.PreviewZoomChanged += PreviewControl_PreviewZoomChanged;
         LoadAppState();
         UpdatePresetLibraryUi();
+        RefreshTargetProfileControls();
         RefreshUnityRuntimeControls();
 
         ApplyBorderStateToUi();
@@ -656,21 +682,31 @@ public partial class MainWindow : Window
 
         PreviewTarget[] targets = PreviewTargetCatalog.GetCommonTargets();
         SliceEditorState previous = CreateEditorState();
-        foreach (PreviewTarget target in targets)
+        try
         {
-            SetTargetSize(target.Width, target.Height);
-            BitmapSource bitmap = PreviewControl.RenderOutputBitmap(ExportDebugCheckBox.IsChecked == true);
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            foreach (PreviewTarget target in targets)
+            {
+                SetTargetSize(target.Width, target.Height);
+                BitmapSource bitmap = PreviewControl.RenderOutputBitmap(ExportDebugCheckBox.IsChecked == true);
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(bitmap));
 
-            string baseName = _imagePath is null ? "twenty-five-slice" : Path.GetFileNameWithoutExtension(_imagePath);
-            string fileName = $"{baseName}.{target.Width:0}x{target.Height:0}.png";
-            using FileStream stream = File.Create(Path.Combine(dialog.FolderName, fileName));
-            encoder.Save(stream);
+                string baseName = _imagePath is null ? "twenty-five-slice" : Path.GetFileNameWithoutExtension(_imagePath);
+                string fileName = $"{baseName}.{target.Width:0}x{target.Height:0}.png";
+                using FileStream stream = File.Create(Path.Combine(dialog.FolderName, fileName));
+                encoder.Save(stream);
+            }
+
+            BatchResultsText.Text = $"Exported {targets.Length} previews to {dialog.FolderName}.";
         }
-
-        ApplyEditorState(previous);
-        BatchResultsText.Text = $"Exported {targets.Length} previews to {dialog.FolderName}.";
+        catch (Exception exception)
+        {
+            MessageBox.Show(this, exception.Message, "Unable to batch export previews", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            ApplyEditorState(previous);
+        }
     }
 
     private void AddXGuide_Click(object sender, RoutedEventArgs e)
@@ -1139,15 +1175,22 @@ public partial class MainWindow : Window
 
     private void LoadImage(string filePath, SpriteAssetContext? preferredContext = null, bool preferProvidedContext = false)
     {
-        SpriteSourceLoadResult resolved = SpriteAssetContextResolver.Load(filePath, preferredContext, preferProvidedContext);
+        SpriteSourceLoadResult resolved = SpriteAssetContextResolver.Load(
+            filePath,
+            preferredContext,
+            preferProvidedContext,
+            _minimumDetectedRegionPixelCount);
 
+        _sourceTexture = resolved.TextureImage;
         _sourceImage = resolved.SourceImage;
         _spriteAssetContext = resolved.Context?.Clone();
+        _autoDetectedSpriteCandidates = resolved.AutoDetectedCandidates.Select(candidate => candidate.Clone()).ToArray();
         _imagePath = filePath;
         ResetHandoffTargetToCurrentSource();
 
         ApplySpriteContextDefaults();
         UpdateSourceInfoText();
+        RefreshAutoDetectedSpriteCandidateControls();
         _recentFiles.Add(filePath);
         UpdateRecentFilesUi();
         if (!_isRestoringSession)
@@ -1203,6 +1246,19 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (string.Equals(_spriteAssetContext.SpriteName, SpriteRegionDetectionService.AutoDetectedSpriteName, StringComparison.Ordinal))
+        {
+            ImageSizeText.Text = $"{_sourceImage.PixelWidth} x {_sourceImage.PixelHeight} sprite px auto-detected from {_spriteAssetContext.TextureWidth} x {_spriteAssetContext.TextureHeight} texture px";
+            string candidateHint = _autoDetectedSpriteCandidates.Count > 1
+                ? $" Choose from {_autoDetectedSpriteCandidates.Count} detected regions below."
+                : string.Empty;
+            string filterHint = _minimumDetectedRegionPixelCount > 1
+                ? $" Noise filter is set to {_minimumDetectedRegionPixelCount} connected pixels minimum."
+                : string.Empty;
+            SpriteContextText.Text = $"{SpriteRegionDetectionService.AutoDetectedSpriteName}: rect {_spriteAssetContext.SpriteRect.X},{_spriteAssetContext.SpriteRect.Y} {_spriteAssetContext.SpriteRect.Width}x{_spriteAssetContext.SpriteRect.Height}px, pivot {_spriteAssetContext.PivotPixels.X:0.###},{_spriteAssetContext.PivotPixels.Y:0.###} px, {_spriteAssetContext.PixelsPerUnit:0.###} PPU from the loaded texture.{candidateHint}{filterHint}";
+            return;
+        }
+
         string spriteName = string.IsNullOrWhiteSpace(_spriteAssetContext.SpriteName) ? "Sprite" : _spriteAssetContext.SpriteName;
         string sidecarLabel = string.IsNullOrWhiteSpace(_spriteAssetContext.SidecarPath)
             ? "session metadata"
@@ -1219,8 +1275,237 @@ public partial class MainWindow : Window
             return "Sprite context: none; preview uses the full loaded image.";
         }
 
+        if (string.Equals(_spriteAssetContext.SpriteName, SpriteRegionDetectionService.AutoDetectedSpriteName, StringComparison.Ordinal))
+        {
+            return $"Sprite context: auto-detected rect {_spriteAssetContext.SpriteRect.X},{_spriteAssetContext.SpriteRect.Y} {_spriteAssetContext.SpriteRect.Width}x{_spriteAssetContext.SpriteRect.Height}px within {_spriteAssetContext.TextureWidth} x {_spriteAssetContext.TextureHeight}px texture, pivot {_spriteAssetContext.PivotPixels.X:0.###},{_spriteAssetContext.PivotPixels.Y:0.###} px, {_spriteAssetContext.PixelsPerUnit:0.###} PPU.";
+        }
+
         string spriteName = string.IsNullOrWhiteSpace(_spriteAssetContext.SpriteName) ? "unnamed sprite" : _spriteAssetContext.SpriteName;
         return $"Sprite context: {spriteName}, rect {_spriteAssetContext.SpriteRect.X},{_spriteAssetContext.SpriteRect.Y} {_spriteAssetContext.SpriteRect.Width}x{_spriteAssetContext.SpriteRect.Height}px within {_spriteAssetContext.TextureWidth} x {_spriteAssetContext.TextureHeight}px atlas, pivot {_spriteAssetContext.PivotPixels.X:0.###},{_spriteAssetContext.PivotPixels.Y:0.###} px, {_spriteAssetContext.PixelsPerUnit:0.###} PPU.";
+    }
+
+    private void RefreshAutoDetectedSpriteCandidateControls()
+    {
+        bool wasUpdating = _isUpdatingUi;
+        _isUpdatingUi = true;
+        try
+        {
+            bool showAutoDetectionControls = ShouldShowAutoDetectedCandidateControls();
+            bool showCandidates = _autoDetectedSpriteCandidates.Count > 0;
+            bool showPicker = _autoDetectedSpriteCandidates.Count > 1;
+
+            DetectedSpriteRegionsText.Visibility = showAutoDetectionControls ? Visibility.Visible : Visibility.Collapsed;
+            DetectedSpriteRegionsComboBox.Visibility = showPicker ? Visibility.Visible : Visibility.Collapsed;
+            DetectedSpriteRegionFilterGrid.Visibility = showAutoDetectionControls ? Visibility.Visible : Visibility.Collapsed;
+            DetectedSpriteRegionThumbnailsListBox.Visibility = showCandidates ? Visibility.Visible : Visibility.Collapsed;
+            DetectedSpriteRegionFilterComboBox.SelectedValue = _minimumDetectedRegionPixelCount;
+
+            if (!showAutoDetectionControls)
+            {
+                DetectedSpriteRegionsText.Text = "Detected Regions";
+                DetectedSpriteRegionFilterHintText.Text = "Ignore tiny fragments when raw-texture auto-detection finds noise.";
+                DetectedSpriteRegionsComboBox.ItemsSource = null;
+                DetectedSpriteRegionsComboBox.SelectedIndex = -1;
+                DetectedSpriteRegionThumbnailsListBox.ItemsSource = null;
+                DetectedSpriteRegionThumbnailsListBox.SelectedIndex = -1;
+                return;
+            }
+
+            DetectedSpriteRegionsText.Text = showCandidates
+                ? $"Detected Regions ({_autoDetectedSpriteCandidates.Count})"
+                : "Detected Regions";
+            DetectedSpriteRegionFilterHintText.Text = showCandidates
+                ? $"Ignore candidates smaller than {_minimumDetectedRegionPixelCount} connected pixels."
+                : $"No regions met the {_minimumDetectedRegionPixelCount}-pixel minimum. Lower the filter or keep the full image.";
+
+            if (!showCandidates)
+            {
+                DetectedSpriteRegionsComboBox.ItemsSource = null;
+                DetectedSpriteRegionsComboBox.SelectedIndex = -1;
+                DetectedSpriteRegionThumbnailsListBox.ItemsSource = null;
+                DetectedSpriteRegionThumbnailsListBox.SelectedIndex = -1;
+                return;
+            }
+
+            DetectedSpriteRegionsComboBox.ItemsSource = _autoDetectedSpriteCandidates.Select(BuildDetectedSpriteCandidateLabel).ToArray();
+            int selectedIndex = FindAutoDetectedSpriteCandidateIndex(_spriteAssetContext);
+            int safeSelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+            DetectedSpriteRegionsComboBox.SelectedIndex = safeSelectedIndex;
+            DetectedSpriteRegionThumbnailsListBox.ItemsSource = BuildDetectedSpriteRegionThumbnailItems();
+            DetectedSpriteRegionThumbnailsListBox.SelectedIndex = safeSelectedIndex;
+        }
+        finally
+        {
+            _isUpdatingUi = wasUpdating;
+        }
+    }
+
+    private bool ShouldShowAutoDetectedCandidateControls()
+    {
+        return _sourceTexture is not null && (_spriteAssetContext is null || IsAutoDetectedSpriteContext(_spriteAssetContext));
+    }
+
+    private string BuildDetectedSpriteCandidateLabel(SpriteAssetContext candidate)
+    {
+        return $"{candidate.SpriteRect.Width}x{candidate.SpriteRect.Height} at {candidate.SpriteRect.X},{candidate.SpriteRect.Y}";
+    }
+
+    private IReadOnlyList<DetectedSpriteRegionThumbnailItem> BuildDetectedSpriteRegionThumbnailItems()
+    {
+        if (_sourceTexture is null)
+        {
+            return [];
+        }
+
+        return _autoDetectedSpriteCandidates
+            .Select(candidate => new DetectedSpriteRegionThumbnailItem(
+                CreateDetectedSpriteRegionThumbnail(candidate),
+                BuildDetectedSpriteCandidateLabel(candidate)))
+            .ToArray();
+    }
+
+    private BitmapSource CreateDetectedSpriteRegionThumbnail(SpriteAssetContext candidate)
+    {
+        if (_sourceTexture is null)
+        {
+            throw new InvalidOperationException("A source texture must be loaded before creating detected-region thumbnails.");
+        }
+
+        if (candidate.SpriteRect.X == 0 &&
+            candidate.SpriteRect.Y == 0 &&
+            candidate.SpriteRect.Width == _sourceTexture.PixelWidth &&
+            candidate.SpriteRect.Height == _sourceTexture.PixelHeight)
+        {
+            return _sourceTexture;
+        }
+
+        var cropped = new CroppedBitmap(_sourceTexture, new Int32Rect(
+            candidate.SpriteRect.X,
+            candidate.SpriteRect.Y,
+            candidate.SpriteRect.Width,
+            candidate.SpriteRect.Height));
+        cropped.Freeze();
+        return cropped;
+    }
+
+    private int FindAutoDetectedSpriteCandidateIndex(SpriteAssetContext? currentContext)
+    {
+        if (currentContext is null)
+        {
+            return -1;
+        }
+
+        for (int index = 0; index < _autoDetectedSpriteCandidates.Count; index++)
+        {
+            if (HaveSameSpriteRect(_autoDetectedSpriteCandidates[index], currentContext))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool HaveSameSpriteRect(SpriteAssetContext left, SpriteAssetContext right)
+    {
+        return left.SpriteRect.X == right.SpriteRect.X &&
+               left.SpriteRect.Y == right.SpriteRect.Y &&
+               left.SpriteRect.Width == right.SpriteRect.Width &&
+               left.SpriteRect.Height == right.SpriteRect.Height;
+    }
+
+    private static bool IsAutoDetectedSpriteContext(SpriteAssetContext? context)
+    {
+        return context is not null &&
+               string.Equals(context.SpriteName, SpriteRegionDetectionService.AutoDetectedSpriteName, StringComparison.Ordinal);
+    }
+
+    private void DetectedSpriteRegionsComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ApplyDetectedSpriteCandidateSelection(DetectedSpriteRegionsComboBox.SelectedIndex, syncThumbnails: true);
+    }
+
+    private void DetectedSpriteRegionThumbnailsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ApplyDetectedSpriteCandidateSelection(DetectedSpriteRegionThumbnailsListBox.SelectedIndex, syncComboBox: true);
+    }
+
+    private void ApplyDetectedSpriteCandidateSelection(int selectedIndex, bool syncComboBox = false, bool syncThumbnails = false)
+    {
+        if (_isUpdatingUi || _imagePath is null)
+        {
+            return;
+        }
+
+        if (selectedIndex < 0 || selectedIndex >= _autoDetectedSpriteCandidates.Count)
+        {
+            return;
+        }
+
+        bool wasUpdating = _isUpdatingUi;
+        _isUpdatingUi = true;
+        try
+        {
+            if (syncComboBox && DetectedSpriteRegionsComboBox.SelectedIndex != selectedIndex)
+            {
+                DetectedSpriteRegionsComboBox.SelectedIndex = selectedIndex;
+            }
+
+            if (syncThumbnails && DetectedSpriteRegionThumbnailsListBox.SelectedIndex != selectedIndex)
+            {
+                DetectedSpriteRegionThumbnailsListBox.SelectedIndex = selectedIndex;
+            }
+        }
+        finally
+        {
+            _isUpdatingUi = wasUpdating;
+        }
+
+        SpriteAssetContext candidate = _autoDetectedSpriteCandidates[selectedIndex];
+        if (_spriteAssetContext is not null && HaveSameSpriteRect(candidate, _spriteAssetContext))
+        {
+            return;
+        }
+
+        try
+        {
+            LoadImage(_imagePath, candidate, preferProvidedContext: true);
+            PreviewHintText.Text = $"Switched to detected region {selectedIndex + 1}.";
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(this, exception.Message, "Unable to switch detected region", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void DetectedSpriteRegionFilterComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi || _imagePath is null || DetectedSpriteRegionFilterComboBox.SelectedValue is not int minimumPixelCount)
+        {
+            return;
+        }
+
+        if (minimumPixelCount == _minimumDetectedRegionPixelCount)
+        {
+            return;
+        }
+
+        _minimumDetectedRegionPixelCount = minimumPixelCount;
+        SpriteAssetContext? preferredContext = IsAutoDetectedSpriteContext(_spriteAssetContext)
+            ? _spriteAssetContext?.Clone()
+            : null;
+
+        try
+        {
+            LoadImage(_imagePath, preferredContext, preferProvidedContext: false);
+            PreviewHintText.Text = _autoDetectedSpriteCandidates.Count > 0
+                ? $"Ignored detected regions smaller than {_minimumDetectedRegionPixelCount} connected pixels."
+                : $"No detected regions met the {_minimumDetectedRegionPixelCount}-pixel minimum.";
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(this, exception.Message, "Unable to update detected-region filter", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void ConfigureTargetSize(int sourceWidth, int sourceHeight)
@@ -1444,7 +1729,7 @@ public partial class MainWindow : Window
         PreviewControl.ShowSourceGuides = SourceComparisonCheckBox.IsChecked == true;
         PreviewControl.FlipX = FlipXCheckBox.IsChecked == true;
         PreviewControl.FlipY = FlipYCheckBox.IsChecked == true;
-        UnityRuntimeSummaryText.Text = UnityRuntimeSettingsSummaryService.Build(_unityRuntimeSettings, _sourceImage, _spriteAssetContext, TargetWidthSlider.Value, TargetHeightSlider.Value);
+        UnityRuntimeSummaryText.Text = UnityRuntimeSettingsSummaryService.Build(_unityRuntimeSettings, _sourceImage, _spriteAssetContext, TargetWidthSlider.Value, TargetHeightSlider.Value, _handoffTargetKind);
 
         PreviewSummaryText.Text = _sourceImage is null
             ? "Load an image to render the 25-slice layout."
@@ -1483,10 +1768,13 @@ public partial class MainWindow : Window
         }
         else
         {
+            _sourceTexture = null;
             _sourceImage = null;
             _imagePath = null;
             _spriteAssetContext = imported.SpriteContext?.Clone();
+            _autoDetectedSpriteCandidates = [];
             UpdateSourceInfoText();
+            RefreshAutoDetectedSpriteCandidateControls();
             UpdatePreview();
         }
 
@@ -1541,12 +1829,14 @@ public partial class MainWindow : Window
     {
         _handoffTargetKind = DesktopHandoffEnvelope.DefaultTargetKind;
         _handoffTargetName = ResolveDefaultHandoffTargetName();
+        RefreshTargetProfileControls();
     }
 
     private void ApplyImportedHandoffTarget(string? targetKind, string? targetName)
     {
         _handoffTargetKind = string.IsNullOrWhiteSpace(targetKind) ? DesktopHandoffEnvelope.DefaultTargetKind : targetKind.Trim();
         _handoffTargetName = string.IsNullOrWhiteSpace(targetName) ? ResolveDefaultHandoffTargetName() : targetName.Trim();
+        RefreshTargetProfileControls();
     }
 
     private string ResolveCurrentHandoffTargetName()
@@ -2220,10 +2510,13 @@ public partial class MainWindow : Window
             }
             else
             {
+                _sourceTexture = null;
                 _sourceImage = null;
                 _imagePath = null;
                 _spriteAssetContext = session.SpriteContext?.Clone();
+                _autoDetectedSpriteCandidates = [];
                 UpdateSourceInfoText();
+                RefreshAutoDetectedSpriteCandidateControls();
                 UpdatePreview();
             }
 
@@ -2281,7 +2574,9 @@ public partial class MainWindow : Window
             _sourceImage.PixelHeight,
             TargetWidthSlider.Value,
             TargetHeightSlider.Value,
-            CreateCurrentSliceData());
+            CreateCurrentSliceData(),
+            _unityRuntimeSettings,
+            _handoffTargetKind);
 
         ValidationText.Text = string.Join(Environment.NewLine, messages.Select(FormatValidationMessage));
     }
@@ -2300,7 +2595,9 @@ public partial class MainWindow : Window
             _sourceImage.PixelWidth,
             _sourceImage.PixelHeight,
             CreateCurrentSliceData(),
-            targets);
+            targets,
+            _unityRuntimeSettings,
+            _handoffTargetKind);
 
         var builder = new StringBuilder();
         foreach (BatchPreviewResult result in results)
@@ -2449,6 +2746,40 @@ public partial class MainWindow : Window
         {
             _isUpdatingUi = wasUpdating;
         }
+    }
+
+    private void RefreshTargetProfileControls()
+    {
+        bool wasUpdating = _isUpdatingUi;
+        _isUpdatingUi = true;
+        try
+        {
+            TargetProfileComboBox.SelectedItem = _targetProfiles.FirstOrDefault(profile => string.Equals(profile.TargetKind, _handoffTargetKind, StringComparison.Ordinal));
+            TargetProfileHintText.Text = UnityTargetProfileCatalog.GetDescription(_handoffTargetKind);
+        }
+        finally
+        {
+            _isUpdatingUi = wasUpdating;
+        }
+    }
+
+    private void TargetProfileComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi || TargetProfileComboBox.SelectedItem is not UnityTargetProfileDescriptor profile)
+        {
+            return;
+        }
+
+        _handoffTargetKind = profile.TargetKind;
+        RefreshTargetProfileControls();
+        UpdatePreview();
+    }
+
+    private void ApplyTargetProfileDefaults_Click(object sender, RoutedEventArgs e)
+    {
+        _unityRuntimeSettings = UnityTargetProfileCatalog.ApplyRecommendedDefaults(_handoffTargetKind, _unityRuntimeSettings, _spriteAssetContext);
+        RefreshUnityRuntimeControls();
+        UpdatePreview();
     }
 
     private void UnityRuntimeSettingChanged(object sender, RoutedEventArgs e)
