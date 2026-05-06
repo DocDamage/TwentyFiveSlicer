@@ -30,6 +30,7 @@ var tests = new (string Name, Action Test)[]
     ("Preview viewport clamps pan to visible overflow", PreviewViewportClampsPanToVisibleOverflow),
     ("Preview control resets zoom and pan", PreviewControlResetsZoomAndPan),
     ("SliceGuideInteraction detects intersection before single guides", SliceGuideInteractionDetectsIntersectionBeforeSingleGuides),
+    ("SliceGuideInteraction detects variable guides beyond original four", SliceGuideInteractionDetectsVariableGuidesBeyondOriginalFour),
     ("SliceGuideInteraction converts point to guide percent", SliceGuideInteractionConvertsPointToGuidePercent),
     ("Slice data JSON stays Unity compatible", SliceDataJsonStaysUnityCompatible),
     ("SliceValidation warns when fixed columns exceed target width", SliceValidationWarnsWhenFixedColumnsExceedTargetWidth),
@@ -471,6 +472,9 @@ static void MainWindowExposesVariableGridControls()
     Assert.True(xaml.Contains("Click=\"AddYGuide_Click\"", StringComparison.Ordinal), "Main window should let users add Y guides.");
     Assert.True(xaml.Contains("Click=\"RemoveXGuide_Click\"", StringComparison.Ordinal), "Main window should let users remove X guides.");
     Assert.True(xaml.Contains("Click=\"RemoveYGuide_Click\"", StringComparison.Ordinal), "Main window should let users remove Y guides.");
+    Assert.True(xaml.Contains("x:Name=\"SelectedGuideText\"", StringComparison.Ordinal), "Main window should show selected guide position and cursor state.");
+    Assert.True(xaml.Contains("GuideSelectionChanged=\"PreviewControl_GuideSelectionChanged\"", StringComparison.Ordinal), "Preview should report guide selection to the variable-grid panel.");
+    Assert.True(xaml.Contains("GuidePointerChanged=\"PreviewControl_GuidePointerChanged\"", StringComparison.Ordinal), "Preview should report cursor percentages for add-at-cursor guide creation.");
 }
 
 static void MainWindowConstructsWithoutStartupEventCrash()
@@ -845,6 +849,20 @@ static void SliceGuideInteractionDetectsIntersectionBeforeSingleGuides()
     Assert.Equal(SliceGuideHitKind.Intersection, hit.Kind, "A point near both guide axes should select an intersection handle.");
     Assert.Equal(1, hit.VerticalIndex, "Intersection hit should preserve vertical guide index.");
     Assert.Equal(1, hit.HorizontalIndex, "Intersection hit should preserve horizontal guide index.");
+}
+
+static void SliceGuideInteractionDetectsVariableGuidesBeyondOriginalFour()
+{
+    var previewRect = new Rect(0d, 0d, 500d, 200d);
+    var data = new TwentyFiveSliceData([10d, 20d, 30d, 40d, 50d, 60d], [15d, 30d, 45d, 60d, 75d]);
+
+    SliceGuideHit verticalHit = SliceGuideInteraction.HitTest(previewRect, data, new Point(300d, 20d), threshold: 2d);
+    SliceGuideHit horizontalHit = SliceGuideInteraction.HitTest(previewRect, data, new Point(20d, 150d), threshold: 2d);
+
+    Assert.Equal(SliceGuideHitKind.Vertical, verticalHit.Kind, "Variable-grid hit testing should include guides after the original four.");
+    Assert.Equal(5, verticalHit.VerticalIndex, "Vertical hit should preserve the later guide index.");
+    Assert.Equal(SliceGuideHitKind.Horizontal, horizontalHit.Kind, "Variable-grid hit testing should include later Y guides.");
+    Assert.Equal(4, horizontalHit.HorizontalIndex, "Horizontal hit should preserve the later guide index.");
 }
 
 static void SliceGuideInteractionConvertsPointToGuidePercent()
@@ -1285,6 +1303,7 @@ static void CloudAiRequestBuilderBuildsOpenAiCompatibleRequests()
     Assert.Equal(new AuthenticationHeaderValue("Bearer", "openai-test-key"), request.Headers.Authorization!, "OpenAI request should use bearer auth.");
     Assert.True(body.Contains("\"model\":\"gpt-5.1\""), "OpenAI body should include selected model.");
     Assert.True(body.Contains("Analyze this slice."), "OpenAI body should include prompt.");
+    Assert.True(body.Contains("schemaVersion 2", StringComparison.Ordinal), "Cloud requests should steer models toward v2 variable-grid JSON.");
 }
 
 static void CloudAiRequestBuilderBuildsAnthropicRequests()
@@ -1757,7 +1776,10 @@ static void IdeAssistantBridgeReturnsPromptPreviewJson()
     JsonElement root = document.RootElement;
 
     Assert.Equal("twenty-five-slicer.ai.prompt.v1", root.GetProperty("schema").GetString(), "Prompt output should expose a stable schema name.");
-    Assert.True(root.GetProperty("prompt").GetString()!.Contains("make this safer", StringComparison.OrdinalIgnoreCase), "Prompt preview should include the user request.");
+    string prompt = root.GetProperty("prompt").GetString()!;
+    Assert.True(prompt.Contains("make this safer", StringComparison.OrdinalIgnoreCase), "Prompt preview should include the user request.");
+    Assert.True(prompt.Contains("schemaVersion: 2", StringComparison.Ordinal), "Prompt preview should ask IDE assistants for v2 variable-grid JSON.");
+    Assert.True(prompt.Contains("X segment modes", StringComparison.Ordinal), "Prompt preview should include per-axis segment modes.");
     Assert.True(root.GetProperty("sliceData").GetProperty("xGuidesPercent").GetArrayLength() == 4, "Prompt preview should include the slice data being analyzed.");
 }
 

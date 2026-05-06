@@ -8,7 +8,7 @@ namespace TwentyFiveSlicer.Desktop.Services;
 
 public static class CloudAiRequestBuilder
 {
-    private const string SystemPrompt = "You are helping analyze 25-slice UI artwork. Return concise, practical slice-border advice.";
+    private const string SystemPrompt = "You are helping analyze variable-grid slice UI artwork. Return concise, practical guide advice using schemaVersion 2 JSON when proposing edits.";
 
     public static HttpRequestMessage BuildAnalysisRequest(
         CloudAiProviderDescriptor provider,

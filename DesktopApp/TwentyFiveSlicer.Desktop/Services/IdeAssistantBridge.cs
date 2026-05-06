@@ -201,12 +201,15 @@ public static class IdeAssistantBridge
     {
         return string.Join(Environment.NewLine, new[]
         {
-            "Analyze this 25-slice UI asset configuration and recommend border edits.",
+            "Analyze this variable-grid slice UI asset configuration and recommend accurate guide edits.",
             $"Source image: {input.SourceWidth:0.#} x {input.SourceHeight:0.#}px",
             $"Target preview: {input.TargetWidth:0.#} x {input.TargetHeight:0.#}px",
-            $"Vertical borders: {string.Join(", ", input.SliceData.VerticalBorders.Select(value => $"{value:0.#}%"))}",
-            $"Horizontal borders: {string.Join(", ", input.SliceData.HorizontalBorders.Select(value => $"{value:0.#}%"))}",
-            "Return concise advice. If border edits are recommended, include exact JSON with verticalBorders and horizontalBorders arrays of four percentages each.",
+            $"Schema version: {TwentyFiveSliceData.CurrentSchemaVersion}",
+            $"X guides: {string.Join(", ", input.SliceData.XGuidesPercent.Select(value => $"{value:0.#}%"))}",
+            $"Y guides: {string.Join(", ", input.SliceData.YGuidesPercent.Select(value => $"{value:0.#}%"))}",
+            $"X segment modes: {string.Join(", ", input.SliceData.XSegments.Select(segment => segment.Mode.ToString().ToLowerInvariant()))}",
+            $"Y segment modes: {string.Join(", ", input.SliceData.YSegments.Select(segment => segment.Mode.ToString().ToLowerInvariant()))}",
+            "Return concise advice. If edits are recommended, include exact JSON with schemaVersion: 2, xGuidesPercent, yGuidesPercent, xSegments, and ySegments. Segment mode must be fixed, stretch, or hidden. Keep guides ordered, unique, and within 0-100.",
             string.IsNullOrWhiteSpace(userPrompt) ? "User request: analyze and recommend improvements." : $"User request: {userPrompt.Trim()}"
         });
     }

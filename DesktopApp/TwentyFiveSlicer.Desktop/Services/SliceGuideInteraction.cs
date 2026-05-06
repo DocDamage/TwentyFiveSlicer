@@ -47,7 +47,7 @@ public static class SliceGuideInteraction
             return -1;
         }
 
-        for (int index = 0; index < Math.Min(4, borders.Count); index++)
+        for (int index = 0; index < borders.Count; index++)
         {
             double guidePosition = start + (length * borders[index] / 100d);
             if (Math.Abs(position - guidePosition) <= threshold)

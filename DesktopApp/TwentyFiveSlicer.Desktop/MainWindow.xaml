@@ -579,6 +579,11 @@
                                            Foreground="{StaticResource MutedTextBrush}"
                                            TextWrapping="Wrap"
                                            Text="5 x 5 cells" />
+                                <TextBlock x:Name="SelectedGuideText"
+                                           Margin="0,0,0,10"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="Move over the preview to add guides at the cursor. Click a guide to select it." />
                                 <UniformGrid Columns="2">
                                     <Button Content="Add X Guide" Style="{StaticResource ActionButtonStyle}" Click="AddXGuide_Click" />
                                     <Button Content="Add Y Guide" Style="{StaticResource ActionButtonStyle}" Click="AddYGuide_Click" />
@@ -749,7 +754,11 @@
             <Border Grid.Row="1"
                     Style="{StaticResource CardStyle}"
                     Background="{StaticResource PanelBrush}">
-                <controls:TwentyFiveSlicePreviewControl x:Name="PreviewControl" Margin="12" GuideEditChanged="PreviewControl_GuideEditChanged" />
+                <controls:TwentyFiveSlicePreviewControl x:Name="PreviewControl"
+                                                        Margin="12"
+                                                        GuideEditChanged="PreviewControl_GuideEditChanged"
+                                                        GuideSelectionChanged="PreviewControl_GuideSelectionChanged"
+                                                        GuidePointerChanged="PreviewControl_GuidePointerChanged" />
             </Border>
         </Grid>
     </Grid>

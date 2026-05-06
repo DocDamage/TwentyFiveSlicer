@@ -65,6 +65,10 @@ public partial class MainWindow : Window
     private bool _isSyncingTargetSize;
     private bool _isRestoringSession;
     private bool _isWindowReady;
+    private double? _lastPreviewXPercent;
+    private double? _lastPreviewYPercent;
+    private int _selectedXGuideIndex = -1;
+    private int _selectedYGuideIndex = -1;
 
     public MainWindow()
     {
@@ -628,8 +632,10 @@ public partial class MainWindow : Window
 
     private void AddXGuide_Click(object sender, RoutedEventArgs e)
     {
-        if (TryAddGuide(ref _verticalBorders))
+        if (TryAddGuide(ref _verticalBorders, _lastPreviewXPercent))
         {
+            _selectedXGuideIndex = FindNearestGuideIndex(_verticalBorders, _lastPreviewXPercent);
+            _selectedYGuideIndex = -1;
             ApplyBorderStateToUi();
             UpdatePreview();
             RememberCurrentState();
@@ -638,8 +644,10 @@ public partial class MainWindow : Window
 
     private void AddYGuide_Click(object sender, RoutedEventArgs e)
     {
-        if (TryAddGuide(ref _horizontalBorders))
+        if (TryAddGuide(ref _horizontalBorders, _lastPreviewYPercent))
         {
+            _selectedYGuideIndex = FindNearestGuideIndex(_horizontalBorders, _lastPreviewYPercent);
+            _selectedXGuideIndex = -1;
             ApplyBorderStateToUi();
             UpdatePreview();
             RememberCurrentState();
@@ -648,8 +656,9 @@ public partial class MainWindow : Window
 
     private void RemoveXGuide_Click(object sender, RoutedEventArgs e)
     {
-        if (TryRemoveGuide(ref _verticalBorders))
+        if (TryRemoveGuide(ref _verticalBorders, _selectedXGuideIndex))
         {
+            _selectedXGuideIndex = Math.Min(_selectedXGuideIndex, _verticalBorders.Length - 1);
             ApplyBorderStateToUi();
             UpdatePreview();
             RememberCurrentState();
@@ -658,8 +667,9 @@ public partial class MainWindow : Window
 
     private void RemoveYGuide_Click(object sender, RoutedEventArgs e)
     {
-        if (TryRemoveGuide(ref _horizontalBorders))
+        if (TryRemoveGuide(ref _horizontalBorders, _selectedYGuideIndex))
         {
+            _selectedYGuideIndex = Math.Min(_selectedYGuideIndex, _horizontalBorders.Length - 1);
             ApplyBorderStateToUi();
             UpdatePreview();
             RememberCurrentState();
@@ -824,6 +834,17 @@ public partial class MainWindow : Window
 
         borders[e.Index] = e.Percent;
         NormalizeBorders(borders);
+        if (e.IsVertical)
+        {
+            _selectedXGuideIndex = e.Index;
+            _selectedYGuideIndex = -1;
+        }
+        else
+        {
+            _selectedYGuideIndex = e.Index;
+            _selectedXGuideIndex = -1;
+        }
+
         ApplyBorderStateToUi();
         UpdatePreview();
 
@@ -831,6 +852,29 @@ public partial class MainWindow : Window
         {
             RememberCurrentState();
         }
+    }
+
+    private void PreviewControl_GuideSelectionChanged(object? sender, SliceGuideSelectionEventArgs e)
+    {
+        if (e.IsVertical)
+        {
+            _selectedXGuideIndex = e.Index;
+            _selectedYGuideIndex = -1;
+        }
+        else
+        {
+            _selectedYGuideIndex = e.Index;
+            _selectedXGuideIndex = -1;
+        }
+
+        UpdateSelectedGuideText();
+    }
+
+    private void PreviewControl_GuidePointerChanged(object? sender, SliceGuidePointerEventArgs e)
+    {
+        _lastPreviewXPercent = e.XPercent;
+        _lastPreviewYPercent = e.YPercent;
+        UpdateSelectedGuideText();
     }
 
     private void PreviewControl_PreviewZoomChanged(object? sender, double zoom)
@@ -1012,9 +1056,12 @@ public partial class MainWindow : Window
         NormalizeBorders(_horizontalBorders);
         _xSegments = TwentyFiveSliceData.NormalizeSegments(_xSegments, _verticalBorders.Length + 1);
         _ySegments = TwentyFiveSliceData.NormalizeSegments(_ySegments, _horizontalBorders.Length + 1);
+        _selectedXGuideIndex = _selectedXGuideIndex >= _verticalBorders.Length ? -1 : _selectedXGuideIndex;
+        _selectedYGuideIndex = _selectedYGuideIndex >= _horizontalBorders.Length ? -1 : _selectedYGuideIndex;
 
         _isUpdatingUi = true;
         GridSizeText.Text = $"{_verticalBorders.Length + 1} x {_horizontalBorders.Length + 1} cells ({_verticalBorders.Length} X guides, {_horizontalBorders.Length} Y guides)";
+        UpdateSelectedGuideText();
         RefreshSegmentControls();
 
         for (int index = 0; index < _verticalSliders.Length; index++)
@@ -1092,6 +1139,36 @@ public partial class MainWindow : Window
         {
             _isUpdatingUi = false;
         }
+    }
+
+    private void UpdateSelectedGuideText()
+    {
+        if (SelectedGuideText is null)
+        {
+            return;
+        }
+
+        string cursorText = _lastPreviewXPercent.HasValue && _lastPreviewYPercent.HasValue
+            ? $"Cursor {_lastPreviewXPercent.Value:0.#}% X, {_lastPreviewYPercent.Value:0.#}% Y"
+            : "Move over the preview to add guides at the cursor";
+
+        if (_selectedXGuideIndex >= 0 && _selectedXGuideIndex < _verticalBorders.Length)
+        {
+            double percent = _verticalBorders[_selectedXGuideIndex];
+            string pixels = _sourceImage is null ? string.Empty : $" / {(_sourceImage.PixelWidth * percent / 100d):0}px";
+            SelectedGuideText.Text = $"Selected X guide {_selectedXGuideIndex + 1}: {percent:0.##}%{pixels}. {cursorText}.";
+            return;
+        }
+
+        if (_selectedYGuideIndex >= 0 && _selectedYGuideIndex < _horizontalBorders.Length)
+        {
+            double percent = _horizontalBorders[_selectedYGuideIndex];
+            string pixels = _sourceImage is null ? string.Empty : $" / {(_sourceImage.PixelHeight * percent / 100d):0}px";
+            SelectedGuideText.Text = $"Selected Y guide {_selectedYGuideIndex + 1}: {percent:0.##}%{pixels}. {cursorText}.";
+            return;
+        }
+
+        SelectedGuideText.Text = $"{cursorText}. Click a guide to select it, then remove that exact guide.";
     }
 
     private void UpdatePreview()
@@ -1542,13 +1619,16 @@ public partial class MainWindow : Window
     private string BuildCloudAiPrompt()
     {
         var builder = new StringBuilder();
-        builder.AppendLine("Analyze this 25-slice UI asset configuration and recommend border edits.");
+        builder.AppendLine("Analyze this variable-grid slice UI asset configuration and recommend accurate guide edits.");
         builder.AppendLine($"Source image: {(_sourceImage is null ? "not loaded" : $"{_sourceImage.PixelWidth} x {_sourceImage.PixelHeight}px")}");
         builder.AppendLine($"Target preview: {TargetWidthSlider.Value:0} x {TargetHeightSlider.Value:0}px");
-        builder.AppendLine($"Vertical borders: {string.Join(", ", _verticalBorders.Select(value => $"{value:0.#}%"))}");
-        builder.AppendLine($"Horizontal borders: {string.Join(", ", _horizontalBorders.Select(value => $"{value:0.#}%"))}");
+        builder.AppendLine($"Schema version: {TwentyFiveSliceData.CurrentSchemaVersion}");
+        builder.AppendLine($"X guides: {string.Join(", ", _verticalBorders.Select(value => $"{value:0.#}%"))}");
+        builder.AppendLine($"Y guides: {string.Join(", ", _horizontalBorders.Select(value => $"{value:0.#}%"))}");
+        builder.AppendLine($"X segment modes: {string.Join(", ", _xSegments.Select(segment => segment.Mode.ToString().ToLowerInvariant()))}");
+        builder.AppendLine($"Y segment modes: {string.Join(", ", _ySegments.Select(segment => segment.Mode.ToString().ToLowerInvariant()))}");
         builder.AppendLine($"Debug overlay: {DebuggingViewCheckBox.IsChecked == true}; source guides: {SourceComparisonCheckBox.IsChecked == true}; flip X: {FlipXCheckBox.IsChecked == true}; flip Y: {FlipYCheckBox.IsChecked == true}");
-        builder.AppendLine("Return concise advice. If border edits are recommended, include exact JSON with verticalBorders and horizontalBorders arrays of four percentages each.");
+        builder.AppendLine("Return concise advice. If edits are recommended, include exact JSON with schemaVersion: 2, xGuidesPercent, yGuidesPercent, xSegments, and ySegments. Segment mode must be fixed, stretch, or hidden. Keep guides ordered, unique, and within 0-100.");
 
         if (!string.IsNullOrWhiteSpace(AssistantPromptBox.Text))
         {
@@ -1775,11 +1855,21 @@ public partial class MainWindow : Window
         }
     }
 
-    private static bool TryAddGuide(ref double[] guides)
+    private static bool TryAddGuide(ref double[] guides, double? preferredPercent = null)
     {
         if (guides.Length >= TwentyFiveSliceData.MaxSegmentsPerAxis - 1)
         {
             return false;
+        }
+
+        if (preferredPercent.HasValue)
+        {
+            double preferred = Math.Clamp(preferredPercent.Value, 0.01d, 99.99d);
+            if (guides.All(guide => Math.Abs(guide - preferred) >= 0.5d))
+            {
+                guides = TwentyFiveSliceData.NormalizeAxis([.. guides, preferred]);
+                return true;
+            }
         }
 
         double[] stops = [0d, .. TwentyFiveSliceData.NormalizeAxis(guides), 100d];
@@ -1801,15 +1891,38 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private static bool TryRemoveGuide(ref double[] guides)
+    private static bool TryRemoveGuide(ref double[] guides, int selectedIndex = -1)
     {
         if (guides.Length == 0)
         {
             return false;
         }
 
-        guides = TwentyFiveSliceData.NormalizeAxis(guides.Take(guides.Length - 1));
+        int removeIndex = selectedIndex >= 0 && selectedIndex < guides.Length ? selectedIndex : guides.Length - 1;
+        guides = TwentyFiveSliceData.NormalizeAxis(guides.Where((_, index) => index != removeIndex));
         return true;
+    }
+
+    private static int FindNearestGuideIndex(IReadOnlyList<double> guides, double? percent)
+    {
+        if (!percent.HasValue || guides.Count == 0)
+        {
+            return guides.Count - 1;
+        }
+
+        int bestIndex = 0;
+        double bestDistance = double.MaxValue;
+        for (int index = 0; index < guides.Count; index++)
+        {
+            double distance = Math.Abs(guides[index] - percent.Value);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = index;
+            }
+        }
+
+        return bestIndex;
     }
 
     private static string[] BuildSegmentLabels(string axis, IReadOnlyList<double> guides)
