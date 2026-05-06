@@ -23,12 +23,14 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     private static readonly Pen ShadowPen = CreatePen(0, 0, 0, 60, 18d);
 
     private BitmapSource? _sourceImage;
+    private BitmapSource? _renderSourceImage;
     private TwentyFiveSliceData _sliceData = TwentyFiveSliceData.CreateDefault();
     private double _targetWidth = 640d;
     private double _targetHeight = 360d;
     private double _previewZoom = 1d;
     private double _previewPanX;
     private double _previewPanY;
+    private string _tintHex = "#FFFFFFFF";
     private bool _debuggingView;
     private bool _flipX;
     private bool _flipY;
@@ -59,6 +61,24 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         set
         {
             _sourceImage = value;
+            _renderSourceImage = null;
+            InvalidateVisual();
+        }
+    }
+
+    public string TintHex
+    {
+        get => _tintHex;
+        set
+        {
+            string normalized = UnityRuntimeSettings.NormalizeTintHex(value);
+            if (string.Equals(_tintHex, normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _tintHex = normalized;
+            _renderSourceImage = null;
             InvalidateVisual();
         }
     }
@@ -517,14 +537,15 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
 
     private void DrawSlicedImage(DrawingContext drawingContext, Rect outputRect, double scale, bool includeDebugOverlay, bool includeOutlines)
     {
-        if (_sourceImage is null)
+        BitmapSource? renderSource = GetRenderSourceImage();
+        if (renderSource is null)
         {
             return;
         }
 
         IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(
-            _sourceImage.PixelWidth,
-            _sourceImage.PixelHeight,
+            renderSource.PixelWidth,
+            renderSource.PixelHeight,
             outputRect.Width / scale,
             outputRect.Height / scale,
             SliceData,
@@ -544,7 +565,7 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
                 continue;
             }
 
-            drawingContext.DrawRectangle(CreateSourceBrush(region.Source), null, destinationRect);
+            drawingContext.DrawRectangle(CreateSourceBrush(renderSource, region.Source), null, destinationRect);
 
             if (includeDebugOverlay)
             {
@@ -638,9 +659,76 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         drawingContext.DrawText(text, new Point(labelRect.X + 9d, labelRect.Y + 5d));
     }
 
-    private ImageBrush CreateSourceBrush(FloatRect sourceRect)
+    private BitmapSource? GetRenderSourceImage()
     {
-        return new ImageBrush(_sourceImage)
+        if (_sourceImage is null)
+        {
+            return null;
+        }
+
+        if (string.Equals(_tintHex, "#FFFFFFFF", StringComparison.Ordinal))
+        {
+            return _sourceImage;
+        }
+
+        if (_renderSourceImage is not null)
+        {
+            return _renderSourceImage;
+        }
+
+        _renderSourceImage = CreateTintedBitmap(_sourceImage, _tintHex);
+        return _renderSourceImage;
+    }
+
+    private static BitmapSource CreateTintedBitmap(BitmapSource sourceImage, string tintHex)
+    {
+        BitmapSource converted = EnsureBgra32(sourceImage);
+        UnityRuntimeSettings.TryParseTintHex(tintHex, out byte alpha, out byte red, out byte green, out byte blue);
+
+        int stride = converted.PixelWidth * 4;
+        var pixels = new byte[stride * converted.PixelHeight];
+        converted.CopyPixels(pixels, stride, 0);
+
+        for (int index = 0; index < pixels.Length; index += 4)
+        {
+            pixels[index] = (byte)((pixels[index] * blue) / 255);
+            pixels[index + 1] = (byte)((pixels[index + 1] * green) / 255);
+            pixels[index + 2] = (byte)((pixels[index + 2] * red) / 255);
+            pixels[index + 3] = (byte)((pixels[index + 3] * alpha) / 255);
+        }
+
+        BitmapSource tinted = BitmapSource.Create(
+            converted.PixelWidth,
+            converted.PixelHeight,
+            converted.DpiX,
+            converted.DpiY,
+            PixelFormats.Bgra32,
+            converted.Palette,
+            pixels,
+            stride);
+        tinted.Freeze();
+        return tinted;
+    }
+
+    private static BitmapSource EnsureBgra32(BitmapSource sourceImage)
+    {
+        if (sourceImage.Format == PixelFormats.Bgra32)
+        {
+            return sourceImage;
+        }
+
+        var converted = new FormatConvertedBitmap();
+        converted.BeginInit();
+        converted.Source = sourceImage;
+        converted.DestinationFormat = PixelFormats.Bgra32;
+        converted.EndInit();
+        converted.Freeze();
+        return converted;
+    }
+
+    private static ImageBrush CreateSourceBrush(BitmapSource sourceImage, FloatRect sourceRect)
+    {
+        return new ImageBrush(sourceImage)
         {
             AlignmentX = AlignmentX.Left,
             AlignmentY = AlignmentY.Top,

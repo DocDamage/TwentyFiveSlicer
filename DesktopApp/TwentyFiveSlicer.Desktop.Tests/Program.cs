@@ -24,6 +24,7 @@ var tests = new (string Name, Action Test)[]
     ("Layout calculator flips source regions without moving destinations", LayoutCalculatorFlipsSourceRegionsWithoutMovingDestinations),
     ("Preview control renders export bitmap", PreviewControlRendersExportBitmap),
     ("Preview control export bitmap encodes as PNG", PreviewControlExportBitmapEncodesAsPng),
+    ("Preview control applies Unity tint", PreviewControlAppliesUnityTint),
     ("Preview control clamps zoom", PreviewControlClampsZoomValue),
     ("Preview control adjusts zoom from mouse wheel", PreviewControlAdjustsZoomFromMouseWheel),
     ("Preview control resets zoom", PreviewControlResetsZoomValue),
@@ -34,6 +35,14 @@ var tests = new (string Name, Action Test)[]
     ("SliceGuideInteraction detects variable guides beyond original four", SliceGuideInteractionDetectsVariableGuidesBeyondOriginalFour),
     ("SliceGuideInteraction converts point to guide percent", SliceGuideInteractionConvertsPointToGuidePercent),
     ("Slice data JSON stays Unity compatible", SliceDataJsonStaysUnityCompatible),
+    ("Sprite sidecar crops atlas using Unity coordinates", SpriteSidecarCropsAtlasUsingUnityCoordinates),
+    ("Sprite sidecar falls back to preferred context", SpriteSidecarFallsBackToPreferredContext),
+    ("Sprite sidecar can prefer provided context over sidecar", SpriteSidecarCanPreferProvidedContextOverSidecar),
+    ("Desktop handoff export round trips target metadata", DesktopHandoffEnvelopeExportRoundTripsTargetMetadata),
+    ("Desktop handoff envelope imports and resolves texture path", DesktopHandoffEnvelopeImportsAndResolvesTexturePath),
+    ("Desktop handoff preflight flags Unity-incompatible grids", DesktopHandoffPreflightFlagsUnityIncompatibleGrids),
+    ("Unity runtime summary uses imported sprite pivot", UnityRuntimeSummaryUsesImportedSpritePivot),
+    ("Unity runtime summary falls back to imported sprite size", UnityRuntimeSummaryFallsBackToImportedSpriteSize),
     ("SliceValidation warns when fixed columns exceed target width", SliceValidationWarnsWhenFixedColumnsExceedTargetWidth),
     ("SliceValidation warns for variable grid hazards", SliceValidationWarnsForVariableGridHazards),
     ("RecentFileList keeps newest unique files first", RecentFileListKeepsNewestUniqueFilesFirst),
@@ -112,6 +121,9 @@ var tests = new (string Name, Action Test)[]
     ("Slice skin panel renders clean fallback", SliceSkinPanelRendersCleanFallback),
     ("Main window uses skinned card surfaces", MainWindowUsesSkinnedCardSurfaces),
     ("Main window exposes Candy skin toggle and button skin", MainWindowExposesCandySkinToggleAndButtonSkin),
+    ("Main window exposes sprite context summary", MainWindowExposesSpriteContextSummary),
+    ("Main window exposes Unity runtime controls", MainWindowExposesUnityRuntimeControls),
+    ("Main window exposes handoff export", MainWindowExposesHandoffExport),
     ("Main window exposes variable grid controls", MainWindowExposesVariableGridControls),
     ("Main window constructs without startup event crash", MainWindowConstructsWithoutStartupEventCrash),
     ("Slice concept diagram renders", SliceConceptDiagramRenders)
@@ -462,6 +474,43 @@ static void MainWindowExposesCandySkinToggleAndButtonSkin()
     Assert.True(xaml.Contains("FallbackBackground=\"{TemplateBinding Background}\"", StringComparison.Ordinal), "Button template should retain clean fallback styling.");
 }
 
+static void MainWindowExposesSpriteContextSummary()
+{
+    string xamlPath = Path.Combine(DesktopProjectRoot(), "MainWindow.xaml");
+    string xaml = File.ReadAllText(xamlPath);
+
+    Assert.True(xaml.Contains("x:Name=\"SpriteContextText\"", StringComparison.Ordinal), "Main window should expose sprite sidecar summary text in the source card.");
+    Assert.True(xaml.Contains("No sprite sidecar loaded.", StringComparison.Ordinal), "Source card should explain the no-sidecar fallback state.");
+}
+
+static void MainWindowExposesUnityRuntimeControls()
+{
+    string xamlPath = Path.Combine(DesktopProjectRoot(), "MainWindow.xaml");
+    string xaml = File.ReadAllText(xamlPath);
+
+    Assert.True(xaml.Contains("Text=\"Unity Runtime\"", StringComparison.Ordinal), "Main window should expose Unity runtime controls.");
+    Assert.True(xaml.Contains("x:Name=\"UnityRuntimeSummaryText\"", StringComparison.Ordinal), "Main window should show a Unity runtime summary.");
+    Assert.True(xaml.Contains("x:Name=\"UnityTintTextBox\"", StringComparison.Ordinal), "Main window should expose a Unity tint field.");
+    Assert.True(xaml.Contains("x:Name=\"PixelsPerUnitTextBox\"", StringComparison.Ordinal), "Main window should expose a pixels-per-unit field.");
+    Assert.True(xaml.Contains("x:Name=\"UseSpritePivotCheckBox\"", StringComparison.Ordinal), "Main window should expose sprite pivot toggle controls.");
+    Assert.True(xaml.Contains("x:Name=\"SortingLayerTextBox\"", StringComparison.Ordinal), "Main window should expose sorting layer metadata.");
+    Assert.True(xaml.Contains("x:Name=\"SortingOrderTextBox\"", StringComparison.Ordinal), "Main window should expose sorting order metadata.");
+    Assert.True(xaml.Contains("x:Name=\"MaterialNameTextBox\"", StringComparison.Ordinal), "Main window should expose material metadata.");
+    Assert.True(xaml.Contains("x:Name=\"RaycastTargetCheckBox\"", StringComparison.Ordinal), "Main window should expose raycast target metadata.");
+    Assert.True(xaml.Contains("x:Name=\"RaycastPaddingLeftTextBox\"", StringComparison.Ordinal), "Main window should expose raycast padding metadata.");
+    Assert.True(xaml.Contains("LostFocus=\"UnityRuntimeTextBoxCommitted\"", StringComparison.Ordinal), "Runtime text fields should commit changes on focus loss.");
+    Assert.True(xaml.Contains("Checked=\"UnityRuntimeSettingChanged\"", StringComparison.Ordinal), "Runtime toggles should commit changes immediately.");
+}
+
+static void MainWindowExposesHandoffExport()
+{
+    string xamlPath = Path.Combine(DesktopProjectRoot(), "MainWindow.xaml");
+    string xaml = File.ReadAllText(xamlPath);
+
+    Assert.True(xaml.Contains("Click=\"ExportHandoff_Click\"", StringComparison.Ordinal), "Main window should expose a desktop handoff export action.");
+    Assert.True(xaml.Contains("Text=\"Export Handoff\"", StringComparison.Ordinal), "Main window should label the handoff export action.");
+}
+
 static void MainWindowExposesVariableGridControls()
 {
     string xamlPath = Path.Combine(DesktopProjectRoot(), "MainWindow.xaml");
@@ -752,6 +801,29 @@ static void PreviewControlExportBitmapEncodesAsPng()
     });
 }
 
+static void PreviewControlAppliesUnityTint()
+{
+    RunOnStaThread(() =>
+    {
+        var preview = new TwentyFiveSlicePreviewControl
+        {
+            SourceImage = CreateSolidBitmap(8, 8, Colors.White),
+            SliceData = new TwentyFiveSliceData([25d, 40d, 60d, 75d], [25d, 40d, 60d, 75d]),
+            TargetWidth = 32d,
+            TargetHeight = 32d,
+            TintHex = "#FFFF0000"
+        };
+
+        BitmapSource bitmap = preview.RenderOutputBitmap();
+        Color pixel = ReadPixel(bitmap, bitmap.PixelWidth / 2, bitmap.PixelHeight / 2);
+
+        Assert.True(pixel.R > 200, "Tinted preview should preserve strong red output.");
+        Assert.True(pixel.G < 10, "Tinted preview should suppress green output.");
+        Assert.True(pixel.B < 10, "Tinted preview should suppress blue output.");
+        Assert.True(pixel.A > 150, "Tinted preview should remain substantially opaque after rendering.");
+    });
+}
+
 static void PreviewControlClampsZoomValue()
 {
     RunOnStaThread(() =>
@@ -814,6 +886,426 @@ static void PreviewControlAcceptsVariableGuideSelection()
         preview.SelectGuide(isVertical: false, index: 4);
         preview.SelectGuide(isVertical: true, index: 99);
     });
+}
+
+static void SpriteSidecarCropsAtlasUsingUnityCoordinates()
+{
+    string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    string imagePath = Path.Combine(directory, "atlas.png");
+    string sidecarPath = Path.Combine(directory, "atlas.png.sprite.json");
+
+    try
+    {
+        File.WriteAllBytes(imagePath, EncodePng(CreateQuadrantBitmap(4, 4, Colors.Blue, Colors.White, Colors.Red, Colors.Green)));
+        File.WriteAllText(sidecarPath, JsonSerializer.Serialize(new SpriteAssetContext
+        {
+            SpriteName = "RedButton",
+            CoordinateOrigin = "bottom-left",
+            PixelsPerUnit = 32d,
+            SpriteRect = new SpritePixelRect
+            {
+                X = 0,
+                Y = 0,
+                Width = 2,
+                Height = 2
+            },
+            PivotPixels = new SpritePixelPoint
+            {
+                X = 0.5d,
+                Y = 1.5d
+            }
+        }));
+
+        SpriteSourceLoadResult result = SpriteAssetContextResolver.Load(imagePath);
+        Color pixel = ReadPixel(result.SourceImage, 0, 0);
+
+        Assert.Equal(2, result.SourceImage.PixelWidth, "Sidecar crop should use sprite rect width.");
+        Assert.Equal(2, result.SourceImage.PixelHeight, "Sidecar crop should use sprite rect height.");
+        Assert.True(result.Context is not null, "Sidecar load should capture sprite metadata.");
+        Assert.Equal("RedButton", result.Context!.SpriteName, "Sprite name should round trip from sidecar.");
+        Assert.Equal(32d, result.Context.PixelsPerUnit, "Pixels per unit should round trip from sidecar.");
+        Assert.Equal(0.5d, result.Context.PivotPixels.X, "Sprite pivot X should round trip from sidecar.");
+        Assert.Equal(1.5d, result.Context.PivotPixels.Y, "Sprite pivot Y should round trip from sidecar.");
+        Assert.Equal(0, result.Context.SpriteRect.X, "Resolved sprite rect X should preserve atlas origin.");
+        Assert.Equal(2, result.Context.SpriteRect.Y, "Unity bottom-left Y should normalize to top-left pixels.");
+        Assert.True(pixel.R > 200 && pixel.G < 10 && pixel.B < 10, "Resolved crop should target the bottom-left red atlas region.");
+    }
+    finally
+    {
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+}
+
+static void SpriteSidecarFallsBackToPreferredContext()
+{
+    string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    string imagePath = Path.Combine(directory, "sheet.png");
+
+    try
+    {
+        File.WriteAllBytes(imagePath, EncodePng(CreateQuadrantBitmap(4, 4, Colors.Blue, Colors.White, Colors.Red, Colors.Green)));
+
+        SpriteSourceLoadResult result = SpriteAssetContextResolver.Load(imagePath, new SpriteAssetContext
+        {
+            SpriteName = "GreenButton",
+            CoordinateOrigin = "top-left",
+            PixelsPerUnit = 48d,
+            SpriteRect = new SpritePixelRect
+            {
+                X = 2,
+                Y = 2,
+                Width = 2,
+                Height = 2
+            },
+            PivotPixels = new SpritePixelPoint
+            {
+                X = 1d,
+                Y = 1d
+            }
+        });
+
+        Color pixel = ReadPixel(result.SourceImage, 0, 0);
+
+        Assert.True(result.Context is not null, "Preferred sprite context should be applied when no sidecar exists.");
+        Assert.Equal("GreenButton", result.Context!.SpriteName, "Preferred sprite name should be preserved.");
+        Assert.Equal(48d, result.Context.PixelsPerUnit, "Preferred pixels per unit should be preserved.");
+        Assert.Equal(imagePath, result.Context.TexturePath, "Preferred context should bind to the resolved texture path.");
+        Assert.True(pixel.G > 100 && pixel.R < 20 && pixel.B < 20, "Preferred sprite rect should crop the bottom-right green quadrant.");
+    }
+    finally
+    {
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+}
+
+static void SpriteSidecarCanPreferProvidedContextOverSidecar()
+{
+    string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    string imagePath = Path.Combine(directory, "atlas.png");
+    string sidecarPath = Path.Combine(directory, "atlas.png.sprite.json");
+
+    try
+    {
+        File.WriteAllBytes(imagePath, EncodePng(CreateQuadrantBitmap(4, 4, Colors.Blue, Colors.White, Colors.Red, Colors.Green)));
+        File.WriteAllText(sidecarPath, JsonSerializer.Serialize(new SpriteAssetContext
+        {
+            SpriteName = "RedButton",
+            CoordinateOrigin = "bottom-left",
+            PixelsPerUnit = 32d,
+            SpriteRect = new SpritePixelRect
+            {
+                X = 0,
+                Y = 0,
+                Width = 2,
+                Height = 2
+            },
+            PivotPixels = new SpritePixelPoint
+            {
+                X = 0.5d,
+                Y = 1.5d
+            }
+        }));
+
+        SpriteSourceLoadResult result = SpriteAssetContextResolver.Load(imagePath, new SpriteAssetContext
+        {
+            SpriteName = "GreenButton",
+            CoordinateOrigin = "top-left",
+            PixelsPerUnit = 48d,
+            SpriteRect = new SpritePixelRect
+            {
+                X = 2,
+                Y = 2,
+                Width = 2,
+                Height = 2
+            },
+            PivotPixels = new SpritePixelPoint
+            {
+                X = 1d,
+                Y = 1d
+            }
+        }, preferProvidedContext: true);
+
+        Color pixel = ReadPixel(result.SourceImage, 0, 0);
+
+        Assert.True(result.Context is not null, "Preferred context should still produce a resolved sprite context.");
+        Assert.Equal("GreenButton", result.Context!.SpriteName, "Preferred sprite context should win when explicitly requested.");
+        Assert.True(pixel.G > 100 && pixel.R < 20 && pixel.B < 20, "Preferred sprite rect should control the effective crop when requested.");
+    }
+    finally
+    {
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+}
+
+static void DesktopHandoffEnvelopeImportsAndResolvesTexturePath()
+{
+    string projectRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    string assetsDirectory = Path.Combine(projectRoot, "Assets", "UI");
+    Directory.CreateDirectory(assetsDirectory);
+    string imagePath = Path.Combine(assetsDirectory, "atlas.png");
+    string envelopePath = Path.Combine(assetsDirectory, "PlayButton.25slice.handoff.json");
+
+    try
+    {
+        File.WriteAllBytes(imagePath, EncodePng(CreateQuadrantBitmap(4, 4, Colors.Blue, Colors.White, Colors.Red, Colors.Green)));
+        File.WriteAllText(envelopePath,
+            """
+            {
+              "schemaVersion": 1,
+              "targetKind": "twentyFiveSliceSpriteRenderer",
+              "targetName": "PlayButton",
+              "sliceData": {
+                "schemaVersion": 2,
+                "xGuidesPercent": [12, 42, 58, 88],
+                "yGuidesPercent": [10, 40, 60, 90],
+                "xSegments": [{"mode":"fixed"},{"mode":"stretch"},{"mode":"fixed"},{"mode":"stretch"},{"mode":"fixed"}],
+                "ySegments": [{"mode":"fixed"},{"mode":"stretch"},{"mode":"fixed"},{"mode":"stretch"},{"mode":"fixed"}]
+              },
+              "spriteContext": {
+                "schemaVersion": 1,
+                "spriteName": "ButtonGreen",
+                "texturePath": "Assets/UI/atlas.png",
+                "textureWidth": 4,
+                "textureHeight": 4,
+                "coordinateOrigin": "bottom-left",
+                "pixelsPerUnit": 64,
+                "spriteRect": {
+                  "x": 2,
+                  "y": 0,
+                  "width": 2,
+                  "height": 2
+                },
+                "pivotPixels": {
+                  "x": 1,
+                  "y": 1
+                }
+              },
+              "runtimeSettings": {
+                "tintHex": "#FF3366CC",
+                "pixelsPerUnit": 64,
+                "useSpritePivot": false,
+                "customPivotX": 4,
+                "customPivotY": 5,
+                "sortingLayerName": "Foreground",
+                "sortingOrder": 8,
+                "materialName": "UI/Outlined",
+                "raycastTarget": false,
+                "raycastPaddingLeft": 1,
+                "raycastPaddingBottom": 2,
+                "raycastPaddingRight": 3,
+                "raycastPaddingTop": 4
+              }
+            }
+            """);
+
+        DesktopHandoffEnvelopeImportResult result = DesktopHandoffEnvelopeService.Import(envelopePath);
+
+        Assert.Equal("twentyFiveSliceSpriteRenderer", result.TargetKind, "Envelope import should preserve target kind.");
+        Assert.Equal("PlayButton", result.TargetName, "Envelope import should preserve target name.");
+        Assert.Equal(88d, result.SliceData.VerticalBorders[3], "Envelope import should deserialize slice data.");
+        Assert.True(result.SpriteContext is not null, "Envelope import should deserialize sprite context.");
+        Assert.Equal(2, result.SpriteContext!.SpriteRect.Y, "Sprite context should normalize bottom-left Y to top-left coordinates.");
+        Assert.Equal("#FF3366CC", result.RuntimeSettings.TintHex, "Envelope import should deserialize runtime settings.");
+        Assert.Equal(false, result.RuntimeSettings.UseSpritePivot, "Envelope import should preserve pivot mode.");
+        Assert.Equal(Path.GetFullPath(imagePath), result.ResolvedImagePath, "Envelope import should resolve the referenced texture path relative to the envelope location.");
+    }
+    finally
+    {
+        if (Directory.Exists(projectRoot))
+        {
+            Directory.Delete(projectRoot, recursive: true);
+        }
+    }
+}
+
+static void DesktopHandoffEnvelopeExportRoundTripsTargetMetadata()
+{
+    string projectRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(projectRoot);
+    string imagePath = Path.Combine(projectRoot, "atlas.png");
+    string envelopePath = Path.Combine(projectRoot, "PlayButton.25slice.handoff.json");
+
+    try
+    {
+        File.WriteAllBytes(imagePath, EncodePng(CreateQuadrantBitmap(4, 4, Colors.Blue, Colors.White, Colors.Red, Colors.Green)));
+
+        DesktopHandoffEnvelope envelope = DesktopHandoffEnvelopeService.CreateEnvelope(
+            new TwentyFiveSliceData([12d, 42d, 58d, 88d], [10d, 40d, 60d, 90d]),
+            new SpriteAssetContext
+            {
+                SpriteName = "ButtonGreen",
+                TexturePath = imagePath,
+                SidecarPath = Path.Combine(projectRoot, "atlas.png.sprite.json"),
+                TextureWidth = 4,
+                TextureHeight = 4,
+                CoordinateOrigin = "top-left",
+                SpriteRect = new SpritePixelRect
+                {
+                    X = 2,
+                    Y = 2,
+                    Width = 2,
+                    Height = 2
+                },
+                PivotPixels = new SpritePixelPoint
+                {
+                    X = 1d,
+                    Y = 1d
+                },
+                PixelsPerUnit = 64d
+            },
+            new UnityRuntimeSettings
+            {
+                TintHex = "#FF3366CC",
+                PixelsPerUnit = 64d,
+                UseSpritePivot = false,
+                CustomPivotX = 4d,
+                CustomPivotY = 5d,
+                SortingLayerName = "Foreground",
+                SortingOrder = 8,
+                MaterialName = "UI/Outlined",
+                RaycastTarget = false,
+                RaycastPaddingLeft = 1d,
+                RaycastPaddingBottom = 2d,
+                RaycastPaddingRight = 3d,
+                RaycastPaddingTop = 4d
+            },
+            "twentyFiveSliceImage",
+            "PlayButton");
+
+        DesktopHandoffEnvelopeService.Export(envelopePath, envelope);
+        string exportedJson = File.ReadAllText(envelopePath);
+        DesktopHandoffEnvelopeImportResult result = DesktopHandoffEnvelopeService.Import(envelopePath);
+
+        Assert.True(exportedJson.Contains("\"targetKind\": \"twentyFiveSliceImage\"", StringComparison.Ordinal), "Export should use the handoff target kind field name expected by Unity.");
+        Assert.Equal(false, exportedJson.Contains("sidecarPath", StringComparison.OrdinalIgnoreCase), "Export should not leak desktop-only sidecar paths into the handoff contract.");
+        Assert.Equal("twentyFiveSliceImage", result.TargetKind, "Export should preserve target kind for round trip handoff edits.");
+        Assert.Equal("PlayButton", result.TargetName, "Export should preserve target name for round trip handoff edits.");
+        Assert.True(result.SpriteContext is not null, "Export should include sprite context when available.");
+        Assert.Equal(Path.GetFullPath(imagePath), result.ResolvedImagePath, "Export should produce an importable texture path.");
+        Assert.Equal("#FF3366CC", result.RuntimeSettings.TintHex, "Export should round trip runtime settings.");
+    }
+    finally
+    {
+        if (Directory.Exists(projectRoot))
+        {
+            Directory.Delete(projectRoot, recursive: true);
+        }
+    }
+}
+
+static void DesktopHandoffPreflightFlagsUnityIncompatibleGrids()
+{
+    var data = new TwentyFiveSliceData(
+        xGuidesPercent: [10d, 20d, 30d, 40d, 50d],
+        yGuidesPercent: [12d, 42d, 58d, 88d],
+        xSegments:
+        [
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed)
+        ],
+        ySegments:
+        [
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Hidden),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed),
+            new SliceSegmentDefinition(SliceSegmentMode.Stretch),
+            new SliceSegmentDefinition(SliceSegmentMode.Fixed)
+        ]);
+
+    UnityImportCompatibilityReport report = DesktopHandoffEnvelopeService.EvaluateUnityImportCompatibility(data);
+
+    Assert.Equal(false, report.IsCompatible, "Preflight should flag variable-grid envelopes that Unity cannot import.");
+    Assert.Contains(report.Issues, issue => issue.Contains("exactly four X guides and four Y guides", StringComparison.Ordinal));
+    Assert.Contains(report.Issues, issue => issue.Contains("X segment layouts with 5 entries", StringComparison.Ordinal));
+    Assert.Contains(report.Issues, issue => issue.Contains("default 25-slice Y segment pattern", StringComparison.Ordinal));
+}
+
+static void UnityRuntimeSummaryUsesImportedSpritePivot()
+{
+    string summary = UnityRuntimeSettingsSummaryService.Build(
+        new UnityRuntimeSettings
+        {
+            PixelsPerUnit = 32d,
+            UseSpritePivot = true
+        },
+        CreateSolidBitmap(32, 16, Colors.White),
+        new SpriteAssetContext
+        {
+            SpriteName = "Button",
+            TextureWidth = 64,
+            TextureHeight = 32,
+            CoordinateOrigin = "top-left",
+            SpriteRect = new SpritePixelRect
+            {
+                X = 16,
+                Y = 8,
+                Width = 32,
+                Height = 16
+            },
+            PivotPixels = new SpritePixelPoint
+            {
+                X = 4d,
+                Y = 6d
+            },
+            PixelsPerUnit = 32d
+        },
+        64d,
+        32d);
+
+    Assert.True(summary.Contains("imported sprite (4", StringComparison.Ordinal), "Runtime summary should use imported sprite pivot metadata when available.");
+    Assert.True(summary.Contains("2 x 1 units at 32 PPU", StringComparison.Ordinal), "Runtime summary should preserve target-unit conversion with imported metadata.");
+}
+
+static void UnityRuntimeSummaryFallsBackToImportedSpriteSize()
+{
+    string summary = UnityRuntimeSettingsSummaryService.Build(
+        new UnityRuntimeSettings
+        {
+            PixelsPerUnit = 16d,
+            UseSpritePivot = true
+        },
+        null,
+        new SpriteAssetContext
+        {
+            SpriteName = "Button",
+            TextureWidth = 64,
+            TextureHeight = 32,
+            CoordinateOrigin = "top-left",
+            SpriteRect = new SpritePixelRect
+            {
+                X = 16,
+                Y = 8,
+                Width = 32,
+                Height = 16
+            },
+            PivotPixels = new SpritePixelPoint
+            {
+                X = 8d,
+                Y = 4d
+            },
+            PixelsPerUnit = 16d
+        },
+        64d,
+        32d);
+
+    Assert.True(summary.Contains("imported sprite (8", StringComparison.Ordinal), "Runtime summary should still use imported pivot data when no image is loaded.");
+    Assert.True(summary.Contains("Bounds min (-0.5, -0.25)", StringComparison.Ordinal), "Runtime summary should derive bounds from imported sprite dimensions when no image is loaded.");
 }
 
 static void PreviewViewportClampsPanToVisibleOverflow()
@@ -1246,7 +1738,31 @@ static void AppStateStoreRoundTripsLastSession()
         LastSession = new DesktopSessionState
         {
             ImagePath = @"C:\art\button.png",
+            HandoffTargetKind = "twentyFiveSliceSpriteRenderer",
+            HandoffTargetName = "PlayButton",
             SliceData = new TwentyFiveSliceData([12d, 40d, 60d, 88d], [10d, 42d, 58d, 90d]),
+            SpriteContext = new SpriteAssetContext
+            {
+                SpriteName = "ButtonGreen",
+                TexturePath = @"C:\art\atlas.png",
+                SidecarPath = @"C:\art\atlas.png.sprite.json",
+                TextureWidth = 256,
+                TextureHeight = 128,
+                CoordinateOrigin = "top-left",
+                SpriteRect = new SpritePixelRect
+                {
+                    X = 32,
+                    Y = 16,
+                    Width = 96,
+                    Height = 48
+                },
+                PivotPixels = new SpritePixelPoint
+                {
+                    X = 24d,
+                    Y = 12d
+                },
+                PixelsPerUnit = 64d
+            },
             TargetWidth = 1024d,
             TargetHeight = 128d,
             PreviewZoom = 1.5d,
@@ -1259,6 +1775,22 @@ static void AppStateStoreRoundTripsLastSession()
             FlipX = true,
             FlipY = false,
             CandySkinEnabled = false,
+            UnityRuntime = new UnityRuntimeSettings
+            {
+                TintHex = "#FF3366CC",
+                PixelsPerUnit = 64d,
+                UseSpritePivot = false,
+                CustomPivotX = 12.5d,
+                CustomPivotY = 18.25d,
+                SortingLayerName = "Foreground",
+                SortingOrder = 12,
+                MaterialName = "UI/Outlined",
+                RaycastTarget = false,
+                RaycastPaddingLeft = 1d,
+                RaycastPaddingBottom = 2d,
+                RaycastPaddingRight = 3d,
+                RaycastPaddingTop = 4d
+            },
             AssistantOutput = "Best fit: Button",
             ChatMessages = ["You: make this a button", "Assistant: proposal ready"]
         }
@@ -1272,13 +1804,27 @@ static void AppStateStoreRoundTripsLastSession()
         Assert.True(loaded.LastSession is not null, "Last session should round trip.");
         DesktopSessionState session = loaded.LastSession!;
         Assert.Equal(@"C:\art\button.png", session.ImagePath, "Image path should round trip.");
+        Assert.Equal("twentyFiveSliceSpriteRenderer", session.HandoffTargetKind, "Handoff target kind should round trip.");
+        Assert.Equal("PlayButton", session.HandoffTargetName, "Handoff target name should round trip.");
         Assert.Equal(1024d, session.TargetWidth, "Target width should round trip.");
         Assert.Equal(1.5d, session.PreviewZoom, "Preview zoom should round trip.");
         Assert.Equal(25d, session.PreviewPanX, "Preview horizontal pan should round trip.");
         Assert.Equal(-18d, session.PreviewPanY, "Preview vertical pan should round trip.");
+        Assert.True(session.SpriteContext is not null, "Sprite context should round trip.");
+        Assert.Equal("ButtonGreen", session.SpriteContext!.SpriteName, "Sprite name should round trip.");
+        Assert.Equal(96, session.SpriteContext.SpriteRect.Width, "Sprite rect width should round trip.");
+        Assert.Equal(12d, session.SpriteContext.PivotPixels.Y, "Sprite pivot should round trip.");
         Assert.Equal(true, session.KeepAspect, "Toggle state should round trip.");
         Assert.Equal(false, session.CandySkinEnabled, "Candy skin state should round trip.");
         Assert.Equal(88d, session.SliceData.VerticalBorders[3], "Slice data should round trip.");
+        Assert.Equal("#FF3366CC", session.UnityRuntime.TintHex, "Unity tint should round trip.");
+        Assert.Equal(64d, session.UnityRuntime.PixelsPerUnit, "Pixels per unit should round trip.");
+        Assert.Equal(false, session.UnityRuntime.UseSpritePivot, "Pivot mode should round trip.");
+        Assert.Equal(12.5d, session.UnityRuntime.CustomPivotX, "Custom pivot X should round trip.");
+        Assert.Equal("Foreground", session.UnityRuntime.SortingLayerName, "Sorting layer should round trip.");
+        Assert.Equal("UI/Outlined", session.UnityRuntime.MaterialName, "Material metadata should round trip.");
+        Assert.Equal(false, session.UnityRuntime.RaycastTarget, "Raycast target should round trip.");
+        Assert.Equal(4d, session.UnityRuntime.RaycastPaddingTop, "Raycast padding should round trip.");
         Assert.Equal("Best fit: Button", session.AssistantOutput, "Assistant output should round trip.");
         Assert.SequenceEqual(new[] { "You: make this a button", "Assistant: proposal ready" }, session.ChatMessages);
     }
@@ -2038,6 +2584,51 @@ static BitmapSource CreateTransparentPaddingBitmap(int width, int height, int le
     }
 
     return BitmapSource.Create(width, height, 96d, 96d, PixelFormats.Bgra32, null, pixels, width * 4);
+}
+
+static BitmapSource CreateSolidBitmap(int width, int height, Color color)
+{
+    var pixels = new byte[width * height * 4];
+    for (int index = 0; index < pixels.Length; index += 4)
+    {
+        pixels[index] = color.B;
+        pixels[index + 1] = color.G;
+        pixels[index + 2] = color.R;
+        pixels[index + 3] = color.A;
+    }
+
+    return BitmapSource.Create(width, height, 96d, 96d, PixelFormats.Bgra32, null, pixels, width * 4);
+}
+
+static BitmapSource CreateQuadrantBitmap(int width, int height, Color topLeft, Color topRight, Color bottomLeft, Color bottomRight)
+{
+    var pixels = new byte[width * height * 4];
+    int halfWidth = width / 2;
+    int halfHeight = height / 2;
+
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            Color color = y < halfHeight
+                ? (x < halfWidth ? topLeft : topRight)
+                : (x < halfWidth ? bottomLeft : bottomRight);
+            int index = ((y * width) + x) * 4;
+            pixels[index] = color.B;
+            pixels[index + 1] = color.G;
+            pixels[index + 2] = color.R;
+            pixels[index + 3] = color.A;
+        }
+    }
+
+    return BitmapSource.Create(width, height, 96d, 96d, PixelFormats.Bgra32, null, pixels, width * 4);
+}
+
+static Color ReadPixel(BitmapSource bitmap, int x, int y)
+{
+    var pixels = new byte[4];
+    bitmap.CopyPixels(new Int32Rect(x, y, 1, 1), pixels, 4, 0);
+    return Color.FromArgb(pixels[3], pixels[2], pixels[1], pixels[0]);
 }
 
 static CloudAiImageInput CreateCloudImage()

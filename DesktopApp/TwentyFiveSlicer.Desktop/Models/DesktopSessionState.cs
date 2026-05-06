@@ -4,7 +4,15 @@ public sealed class DesktopSessionState
 {
     public string? ImagePath { get; set; }
 
+    public string HandoffTargetKind { get; set; } = DesktopHandoffEnvelope.DefaultTargetKind;
+
+    public string HandoffTargetName { get; set; } = string.Empty;
+
     public TwentyFiveSliceData SliceData { get; set; } = TwentyFiveSliceData.CreateDefault();
+
+    public SpriteAssetContext? SpriteContext { get; set; }
+
+    public UnityRuntimeSettings UnityRuntime { get; set; } = new();
 
     public double TargetWidth { get; set; } = 640d;
 

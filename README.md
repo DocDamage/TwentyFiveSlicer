@@ -232,12 +232,19 @@ Third-party notices live in `DesktopApp/TwentyFiveSlicer.Desktop/Assets/THIRD_PA
 
 ### Unity JSON Bridge
 
-The Unity package can import and export the same JSON files as the standalone desktop app:
+The Unity package can import and export the same JSON files as the standalone desktop app, and it can also export desktop bridge payloads:
 
 - **Tools → Twenty Five Slicer Tools → Import Slice JSON For Selected Sprite**
+- **Tools → Twenty Five Slicer Tools → Import Desktop Handoff Envelope For Selected Target**
 - **Tools → Twenty Five Slicer Tools → Export Slice JSON For Selected Sprite**
+- **Tools → Twenty Five Slicer Tools → Export Sprite Sidecar For Selected Sprite**
+- **Tools → Twenty Five Slicer Tools → Export Desktop Handoff Envelope For Selected Target**
 
-Select a Sprite asset, `TwentyFiveSliceImage`, `TwentyFiveSliceSpriteRenderer`, or normal `SpriteRenderer` before using these menu items. Import writes the selected sprite's data into `SliceDataMap`; export writes the saved `SliceDataMap` entry to desktop-compatible JSON.
+Select a Sprite asset, `TwentyFiveSliceImage`, `TwentyFiveSliceSpriteRenderer`, or normal `SpriteRenderer` before using these menu items. The legacy JSON import writes the selected sprite's data into `SliceDataMap`; the handoff-envelope import updates `SliceDataMap` and applies compatible runtime settings back onto the selected component; the legacy JSON export writes the saved `SliceDataMap` entry to desktop-compatible slice JSON; the sidecar export writes sprite rect/pivot/PPU metadata; and the handoff export writes a combined envelope with slice data, sprite context, runtime settings, and target kind.
+
+On the desktop side, the existing load-slice flow can now open that combined handoff envelope directly. If the referenced texture can be found locally, the desktop app restores the image, crop context, slice data, and runtime settings together from one file.
+
+The desktop toolbar now also includes `Export Handoff`, which writes the current slice data, sprite context, runtime settings, and preserved target metadata back into the same combined envelope format. Before saving, the desktop app warns when the current variable-grid layout will be rejected by Unity's fixed 25-slice importer.
 
 ### Local And Cloud AI Assistance
 

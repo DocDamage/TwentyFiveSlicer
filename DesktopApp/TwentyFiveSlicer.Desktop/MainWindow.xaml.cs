@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Security.Cryptography;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -53,14 +54,18 @@ public partial class MainWindow : Window
     };
     private SliceHistory? _history;
 
-    private BitmapImage? _sourceImage;
+    private BitmapSource? _sourceImage;
     private string? _imagePath;
+    private SpriteAssetContext? _spriteAssetContext;
+    private string _handoffTargetKind = DesktopHandoffEnvelope.DefaultTargetKind;
+    private string _handoffTargetName = string.Empty;
     private SliceAssistantAnalysis? _lastAssistantAnalysis;
     private IReadOnlyList<SliceCandidateSuggestion> _lastCandidateSuggestions = [];
     private SliceEditorState? _candidatePreviewReturnState;
     private SliceEditorState? _chatPreviewReturnState;
     private TwentyFiveSliceData? _pendingChatProposal;
     private SliceSuggestionReview? _pendingChatReview;
+    private UnityRuntimeSettings _unityRuntimeSettings = new();
     private bool _isUpdatingUi;
     private bool _isSyncingTargetSize;
     private bool _isRestoringSession;
@@ -90,6 +95,7 @@ public partial class MainWindow : Window
         PreviewControl.PreviewZoomChanged += PreviewControl_PreviewZoomChanged;
         LoadAppState();
         UpdatePresetLibraryUi();
+        RefreshUnityRuntimeControls();
 
         ApplyBorderStateToUi();
         _history = new SliceHistory(CreateEditorState());
@@ -135,8 +141,8 @@ public partial class MainWindow : Window
     {
         var dialog = new OpenFileDialog
         {
-            Filter = "Slice JSON|*.json|All Files|*.*",
-            Title = "Load slice configuration"
+            Filter = "Slice or Handoff JSON|*.json|All Files|*.*",
+            Title = "Load slice configuration or handoff envelope"
         };
 
         if (dialog.ShowDialog(this) != true)
@@ -178,6 +184,42 @@ public partial class MainWindow : Window
     {
         Clipboard.SetText(CreateSliceJson());
         PreviewHintText.Text = "Slice JSON copied to the clipboard.";
+    }
+
+    private void ExportHandoff_Click(object sender, RoutedEventArgs e)
+    {
+        DesktopHandoffEnvelope envelope = CreateCurrentDesktopHandoffEnvelope();
+        UnityImportCompatibilityReport compatibility = DesktopHandoffEnvelopeService.EvaluateUnityImportCompatibility(envelope.SliceData!);
+        if (!ConfirmHandoffExport(compatibility))
+        {
+            PreviewHintText.Text = "Handoff export canceled.";
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Filter = "Handoff JSON|*.json|All Files|*.*",
+            DefaultExt = ".json",
+            FileName = GetDefaultDesktopHandoffFileName(),
+            Title = "Export desktop handoff envelope"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            DesktopHandoffEnvelopeService.Export(dialog.FileName, envelope);
+            PreviewHintText.Text = compatibility.IsCompatible
+                ? $"Exported {Path.GetFileName(dialog.FileName)}. Unity can import this envelope."
+                : $"Exported {Path.GetFileName(dialog.FileName)} with Unity preflight warnings.";
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(this, exception.Message, "Unable to export handoff envelope", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void ExportPreview_Click(object sender, RoutedEventArgs e)
@@ -1055,20 +1097,17 @@ public partial class MainWindow : Window
         _cloudAiClient.Dispose();
     }
 
-    private void LoadImage(string filePath)
+    private void LoadImage(string filePath, SpriteAssetContext? preferredContext = null, bool preferProvidedContext = false)
     {
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.UriSource = new Uri(filePath);
-        bitmap.EndInit();
-        bitmap.Freeze();
+        SpriteSourceLoadResult resolved = SpriteAssetContextResolver.Load(filePath, preferredContext, preferProvidedContext);
 
-        _sourceImage = bitmap;
+        _sourceImage = resolved.SourceImage;
+        _spriteAssetContext = resolved.Context?.Clone();
         _imagePath = filePath;
+        ResetHandoffTargetToCurrentSource();
 
-        ImagePathText.Text = filePath;
-        ImageSizeText.Text = $"{bitmap.PixelWidth} x {bitmap.PixelHeight} px";
+        ApplySpriteContextDefaults();
+        UpdateSourceInfoText();
         _recentFiles.Add(filePath);
         UpdateRecentFilesUi();
         if (!_isRestoringSession)
@@ -1076,9 +1115,72 @@ public partial class MainWindow : Window
             SaveAppState();
         }
 
-        ConfigureTargetSize(bitmap.PixelWidth, bitmap.PixelHeight);
+        ConfigureTargetSize(_sourceImage.PixelWidth, _sourceImage.PixelHeight);
         _history?.Reset(CreateEditorState());
         UpdatePreview();
+    }
+
+    private void ApplySpriteContextDefaults()
+    {
+        if (_spriteAssetContext is null || _isRestoringSession)
+        {
+            return;
+        }
+
+        UnityRuntimeSettings updatedRuntime = _unityRuntimeSettings.Clone();
+        updatedRuntime.PixelsPerUnit = _spriteAssetContext.PixelsPerUnit;
+        _unityRuntimeSettings = UnityRuntimeSettings.Normalize(updatedRuntime);
+        RefreshUnityRuntimeControls();
+    }
+
+    private void UpdateSourceInfoText()
+    {
+        ImagePathText.Text = _imagePath ?? "No image loaded";
+
+        if (_sourceImage is null)
+        {
+            if (_spriteAssetContext is null)
+            {
+                ImageSizeText.Text = "Open a PNG, JPG, BMP, or GIF to begin.";
+                SpriteContextText.Text = "No sprite sidecar loaded.";
+                return;
+            }
+
+            string importedSpriteName = string.IsNullOrWhiteSpace(_spriteAssetContext.SpriteName) ? "Sprite" : _spriteAssetContext.SpriteName;
+            string textureLabel = string.IsNullOrWhiteSpace(_spriteAssetContext.TexturePath)
+                ? "The referenced texture could not be resolved locally."
+                : $"Referenced texture {_spriteAssetContext.TexturePath} is not available locally.";
+
+            ImageSizeText.Text = textureLabel;
+            SpriteContextText.Text = $"{importedSpriteName}: rect {_spriteAssetContext.SpriteRect.X},{_spriteAssetContext.SpriteRect.Y} {_spriteAssetContext.SpriteRect.Width}x{_spriteAssetContext.SpriteRect.Height}px, pivot {_spriteAssetContext.PivotPixels.X:0.###},{_spriteAssetContext.PivotPixels.Y:0.###} px, {_spriteAssetContext.PixelsPerUnit:0.###} PPU from imported handoff metadata.";
+            return;
+        }
+
+        if (_spriteAssetContext is null)
+        {
+            ImageSizeText.Text = $"{_sourceImage.PixelWidth} x {_sourceImage.PixelHeight} px";
+            SpriteContextText.Text = "No sprite sidecar loaded. Preview uses the full image.";
+            return;
+        }
+
+        string spriteName = string.IsNullOrWhiteSpace(_spriteAssetContext.SpriteName) ? "Sprite" : _spriteAssetContext.SpriteName;
+        string sidecarLabel = string.IsNullOrWhiteSpace(_spriteAssetContext.SidecarPath)
+            ? "session metadata"
+            : Path.GetFileName(_spriteAssetContext.SidecarPath);
+
+        ImageSizeText.Text = $"{_sourceImage.PixelWidth} x {_sourceImage.PixelHeight} sprite px from {_spriteAssetContext.TextureWidth} x {_spriteAssetContext.TextureHeight} atlas px";
+        SpriteContextText.Text = $"{spriteName}: rect {_spriteAssetContext.SpriteRect.X},{_spriteAssetContext.SpriteRect.Y} {_spriteAssetContext.SpriteRect.Width}x{_spriteAssetContext.SpriteRect.Height}px, pivot {_spriteAssetContext.PivotPixels.X:0.###},{_spriteAssetContext.PivotPixels.Y:0.###} px, {_spriteAssetContext.PixelsPerUnit:0.###} PPU via {sidecarLabel}.";
+    }
+
+    private string BuildSpriteContextPromptText()
+    {
+        if (_spriteAssetContext is null)
+        {
+            return "Sprite context: none; preview uses the full loaded image.";
+        }
+
+        string spriteName = string.IsNullOrWhiteSpace(_spriteAssetContext.SpriteName) ? "unnamed sprite" : _spriteAssetContext.SpriteName;
+        return $"Sprite context: {spriteName}, rect {_spriteAssetContext.SpriteRect.X},{_spriteAssetContext.SpriteRect.Y} {_spriteAssetContext.SpriteRect.Width}x{_spriteAssetContext.SpriteRect.Height}px within {_spriteAssetContext.TextureWidth} x {_spriteAssetContext.TextureHeight}px atlas, pivot {_spriteAssetContext.PivotPixels.X:0.###},{_spriteAssetContext.PivotPixels.Y:0.###} px, {_spriteAssetContext.PixelsPerUnit:0.###} PPU.";
     }
 
     private void ConfigureTargetSize(int sourceWidth, int sourceHeight)
@@ -1292,10 +1394,12 @@ public partial class MainWindow : Window
         PreviewControl.TargetWidth = TargetWidthSlider.Value;
         PreviewControl.TargetHeight = TargetHeightSlider.Value;
         PreviewControl.PreviewZoom = PreviewZoomSlider.Value;
+        PreviewControl.TintHex = _unityRuntimeSettings.TintHex;
         PreviewControl.DebuggingView = DebuggingViewCheckBox.IsChecked == true;
         PreviewControl.ShowSourceGuides = SourceComparisonCheckBox.IsChecked == true;
         PreviewControl.FlipX = FlipXCheckBox.IsChecked == true;
         PreviewControl.FlipY = FlipYCheckBox.IsChecked == true;
+        UnityRuntimeSummaryText.Text = UnityRuntimeSettingsSummaryService.Build(_unityRuntimeSettings, _sourceImage, _spriteAssetContext, TargetWidthSlider.Value, TargetHeightSlider.Value);
 
         PreviewSummaryText.Text = _sourceImage is null
             ? "Load an image to render the 25-slice layout."
@@ -1306,6 +1410,12 @@ public partial class MainWindow : Window
     private void LoadSliceDataFromFile(string filePath)
     {
         string json = File.ReadAllText(filePath);
+        if (DesktopHandoffEnvelopeService.LooksLikeEnvelope(json))
+        {
+            ImportDesktopHandoffEnvelope(filePath);
+            return;
+        }
+
         TwentyFiveSliceData? loaded = JsonSerializer.Deserialize<TwentyFiveSliceData>(json, JsonOptions);
         if (loaded is null)
         {
@@ -1317,10 +1427,128 @@ public partial class MainWindow : Window
         PreviewHintText.Text = $"Loaded {Path.GetFileName(filePath)}.";
     }
 
+    private void ImportDesktopHandoffEnvelope(string filePath)
+    {
+        DesktopHandoffEnvelopeImportResult imported = DesktopHandoffEnvelopeService.Import(filePath);
+
+        if (!string.IsNullOrWhiteSpace(imported.ResolvedImagePath) && File.Exists(imported.ResolvedImagePath))
+        {
+            LoadImage(imported.ResolvedImagePath, imported.SpriteContext, preferProvidedContext: true);
+        }
+        else
+        {
+            _sourceImage = null;
+            _imagePath = null;
+            _spriteAssetContext = imported.SpriteContext?.Clone();
+            UpdateSourceInfoText();
+            UpdatePreview();
+        }
+
+        ApplyImportedHandoffTarget(imported.TargetKind, imported.TargetName);
+        ApplySliceData(imported.SliceData);
+        ApplyUnityRuntimeSettings(imported.RuntimeSettings);
+        _history?.Reset(CreateEditorState());
+        PreviewHintText.Text = string.IsNullOrWhiteSpace(imported.ResolvedImagePath)
+            ? $"Loaded {Path.GetFileName(filePath)} with slice, sprite, and runtime settings. The referenced texture could not be resolved locally."
+            : $"Loaded {Path.GetFileName(filePath)} with slice, sprite, and runtime settings for {imported.TargetKind}.";
+
+        if (!_isRestoringSession)
+        {
+            SaveAppState();
+        }
+    }
+
     private string CreateSliceJson()
     {
         var data = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders, _xSegments, _ySegments);
         return JsonSerializer.Serialize(data, JsonOptions);
+    }
+
+    private DesktopHandoffEnvelope CreateCurrentDesktopHandoffEnvelope()
+    {
+        return DesktopHandoffEnvelopeService.CreateEnvelope(
+            CreateCurrentSliceData(),
+            _spriteAssetContext?.Clone(),
+            CreateCurrentUnityRuntimeSettings(),
+            _handoffTargetKind,
+            ResolveCurrentHandoffTargetName());
+    }
+
+    private bool ConfirmHandoffExport(UnityImportCompatibilityReport compatibility)
+    {
+        if (compatibility.IsCompatible)
+        {
+            return true;
+        }
+
+        string message = "Unity's fixed 25-slice importer will reject this handoff envelope:" +
+            Environment.NewLine +
+            Environment.NewLine +
+            string.Join(Environment.NewLine, compatibility.Issues.Select(issue => $"- {issue}")) +
+            Environment.NewLine +
+            Environment.NewLine +
+            "Export anyway?";
+
+        return MessageBox.Show(this, message, "Unity Import Warning", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+    }
+
+    private void ResetHandoffTargetToCurrentSource()
+    {
+        _handoffTargetKind = DesktopHandoffEnvelope.DefaultTargetKind;
+        _handoffTargetName = ResolveDefaultHandoffTargetName();
+    }
+
+    private void ApplyImportedHandoffTarget(string? targetKind, string? targetName)
+    {
+        _handoffTargetKind = string.IsNullOrWhiteSpace(targetKind) ? DesktopHandoffEnvelope.DefaultTargetKind : targetKind.Trim();
+        _handoffTargetName = string.IsNullOrWhiteSpace(targetName) ? ResolveDefaultHandoffTargetName() : targetName.Trim();
+    }
+
+    private string ResolveCurrentHandoffTargetName()
+    {
+        return string.IsNullOrWhiteSpace(_handoffTargetName)
+            ? ResolveDefaultHandoffTargetName()
+            : _handoffTargetName;
+    }
+
+    private string ResolveDefaultHandoffTargetName()
+    {
+        if (!string.IsNullOrWhiteSpace(_spriteAssetContext?.SpriteName))
+        {
+            return _spriteAssetContext.SpriteName.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(_imagePath))
+        {
+            return Path.GetFileNameWithoutExtension(_imagePath);
+        }
+
+        return "Sprite";
+    }
+
+    private string GetDefaultDesktopHandoffFileName()
+    {
+        string name = SanitizeFileNameSegment(ResolveCurrentHandoffTargetName(), "sprite");
+        return $"{name}.25slice.handoff.json";
+    }
+
+    private static string SanitizeFileNameSegment(string? value, string fallback)
+    {
+        string trimmed = value?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return fallback;
+        }
+
+        char[] invalidChars = Path.GetInvalidFileNameChars();
+        var builder = new StringBuilder(trimmed.Length);
+        foreach (char character in trimmed)
+        {
+            builder.Append(invalidChars.Contains(character) ? '_' : character);
+        }
+
+        string sanitized = builder.ToString().Trim();
+        return string.IsNullOrWhiteSpace(sanitized) ? fallback : sanitized;
     }
 
     private void SyncLockedAspect(object sender)
@@ -1805,11 +2033,17 @@ public partial class MainWindow : Window
         return new TwentyFiveSliceData(_verticalBorders, _horizontalBorders, _xSegments, _ySegments);
     }
 
+    private UnityRuntimeSettings CreateCurrentUnityRuntimeSettings()
+    {
+        return _unityRuntimeSettings.Clone();
+    }
+
     private string BuildCloudAiPrompt()
     {
         var builder = new StringBuilder();
         builder.AppendLine("Analyze this variable-grid slice UI asset configuration and recommend accurate guide edits.");
         builder.AppendLine($"Source image: {(_sourceImage is null ? "not loaded" : $"{_sourceImage.PixelWidth} x {_sourceImage.PixelHeight}px")}");
+        builder.AppendLine(BuildSpriteContextPromptText());
         builder.AppendLine($"Target preview: {TargetWidthSlider.Value:0} x {TargetHeightSlider.Value:0}px");
         builder.AppendLine($"Schema version: {TwentyFiveSliceData.CurrentSchemaVersion}");
         builder.AppendLine($"X guides: {string.Join(", ", _verticalBorders.Select(value => $"{value:0.#}%"))}");
@@ -1905,7 +2139,11 @@ public partial class MainWindow : Window
         return new DesktopSessionState
         {
             ImagePath = _imagePath,
+            HandoffTargetKind = _handoffTargetKind,
+            HandoffTargetName = ResolveCurrentHandoffTargetName(),
             SliceData = CreateCurrentSliceData(),
+            SpriteContext = _spriteAssetContext?.Clone(),
+            UnityRuntime = CreateCurrentUnityRuntimeSettings(),
             TargetWidth = TargetWidthSlider.Value,
             TargetHeight = TargetHeightSlider.Value,
             PreviewZoom = PreviewZoomSlider.Value,
@@ -1930,10 +2168,21 @@ public partial class MainWindow : Window
         {
             if (!string.IsNullOrWhiteSpace(session.ImagePath) && File.Exists(session.ImagePath))
             {
-                LoadImage(session.ImagePath);
+                LoadImage(session.ImagePath, session.SpriteContext);
+            }
+            else
+            {
+                _sourceImage = null;
+                _imagePath = null;
+                _spriteAssetContext = session.SpriteContext?.Clone();
+                UpdateSourceInfoText();
+                UpdatePreview();
             }
 
+            ApplyImportedHandoffTarget(session.HandoffTargetKind, session.HandoffTargetName);
+
             ApplySliceData(session.SliceData);
+            ApplyUnityRuntimeSettings(session.UnityRuntime);
 
             _isUpdatingUi = true;
             KeepAspectCheckBox.IsChecked = session.KeepAspect;
@@ -2112,6 +2361,107 @@ public partial class MainWindow : Window
         }
 
         return bestIndex;
+    }
+
+    private void ApplyUnityRuntimeSettings(UnityRuntimeSettings? settings)
+    {
+        _unityRuntimeSettings = UnityRuntimeSettings.Normalize(settings);
+        RefreshUnityRuntimeControls();
+        if (_isWindowReady)
+        {
+            UpdatePreview();
+        }
+    }
+
+    private void RefreshUnityRuntimeControls()
+    {
+        bool wasUpdating = _isUpdatingUi;
+        _isUpdatingUi = true;
+        try
+        {
+            UnityTintTextBox.Text = _unityRuntimeSettings.TintHex;
+            PixelsPerUnitTextBox.Text = _unityRuntimeSettings.PixelsPerUnit.ToString("0.###", CultureInfo.InvariantCulture);
+            UseSpritePivotCheckBox.IsChecked = _unityRuntimeSettings.UseSpritePivot;
+            CustomPivotXTextBox.Text = _unityRuntimeSettings.CustomPivotX.ToString("0.###", CultureInfo.InvariantCulture);
+            CustomPivotYTextBox.Text = _unityRuntimeSettings.CustomPivotY.ToString("0.###", CultureInfo.InvariantCulture);
+            SortingLayerTextBox.Text = _unityRuntimeSettings.SortingLayerName;
+            SortingOrderTextBox.Text = _unityRuntimeSettings.SortingOrder.ToString(CultureInfo.InvariantCulture);
+            MaterialNameTextBox.Text = _unityRuntimeSettings.MaterialName;
+            RaycastTargetCheckBox.IsChecked = _unityRuntimeSettings.RaycastTarget;
+            RaycastPaddingLeftTextBox.Text = _unityRuntimeSettings.RaycastPaddingLeft.ToString("0.###", CultureInfo.InvariantCulture);
+            RaycastPaddingBottomTextBox.Text = _unityRuntimeSettings.RaycastPaddingBottom.ToString("0.###", CultureInfo.InvariantCulture);
+            RaycastPaddingRightTextBox.Text = _unityRuntimeSettings.RaycastPaddingRight.ToString("0.###", CultureInfo.InvariantCulture);
+            RaycastPaddingTopTextBox.Text = _unityRuntimeSettings.RaycastPaddingTop.ToString("0.###", CultureInfo.InvariantCulture);
+
+            bool customPivotEnabled = !_unityRuntimeSettings.UseSpritePivot;
+            CustomPivotXTextBox.IsEnabled = customPivotEnabled;
+            CustomPivotYTextBox.IsEnabled = customPivotEnabled;
+        }
+        finally
+        {
+            _isUpdatingUi = wasUpdating;
+        }
+    }
+
+    private void UnityRuntimeSettingChanged(object sender, RoutedEventArgs e)
+    {
+        CommitUnityRuntimeSettingsFromUi();
+    }
+
+    private void UnityRuntimeTextBoxCommitted(object sender, RoutedEventArgs e)
+    {
+        CommitUnityRuntimeSettingsFromUi();
+    }
+
+    private void UnityRuntimeTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            CommitUnityRuntimeSettingsFromUi();
+            e.Handled = true;
+        }
+    }
+
+    private void CommitUnityRuntimeSettingsFromUi()
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        _unityRuntimeSettings = UnityRuntimeSettings.Normalize(new UnityRuntimeSettings
+        {
+            TintHex = UnityTintTextBox.Text,
+            PixelsPerUnit = ParseDoubleOrDefault(PixelsPerUnitTextBox.Text, 100d),
+            UseSpritePivot = UseSpritePivotCheckBox.IsChecked == true,
+            CustomPivotX = ParseDoubleOrDefault(CustomPivotXTextBox.Text, 0d),
+            CustomPivotY = ParseDoubleOrDefault(CustomPivotYTextBox.Text, 0d),
+            SortingLayerName = SortingLayerTextBox.Text,
+            SortingOrder = ParseIntOrDefault(SortingOrderTextBox.Text, 0),
+            MaterialName = MaterialNameTextBox.Text,
+            RaycastTarget = RaycastTargetCheckBox.IsChecked == true,
+            RaycastPaddingLeft = ParseDoubleOrDefault(RaycastPaddingLeftTextBox.Text, 0d),
+            RaycastPaddingBottom = ParseDoubleOrDefault(RaycastPaddingBottomTextBox.Text, 0d),
+            RaycastPaddingRight = ParseDoubleOrDefault(RaycastPaddingRightTextBox.Text, 0d),
+            RaycastPaddingTop = ParseDoubleOrDefault(RaycastPaddingTopTextBox.Text, 0d)
+        });
+
+        RefreshUnityRuntimeControls();
+        UpdatePreview();
+    }
+
+    private static double ParseDoubleOrDefault(string? text, double fallback)
+    {
+        return double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double parsed)
+            ? parsed
+            : fallback;
+    }
+
+    private static int ParseIntOrDefault(string? text, int fallback)
+    {
+        return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
+            ? parsed
+            : fallback;
     }
 
     private static string[] BuildSegmentLabels(string axis, IReadOnlyList<double> guides)

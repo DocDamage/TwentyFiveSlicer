@@ -187,6 +187,12 @@
                                 <TextBlock Text="Copy JSON" />
                             </StackPanel>
                         </Button>
+                        <Button Style="{StaticResource ActionButtonStyle}" Click="ExportHandoff_Click" ToolTip="Export handoff JSON">
+                            <StackPanel Orientation="Horizontal">
+                                <controls:SvgIcon Source="Assets/Icons/Tabler/download.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
+                                <TextBlock Text="Export Handoff" />
+                            </StackPanel>
+                        </Button>
                         <Button Style="{StaticResource ActionButtonStyle}" Click="ExportPreview_Click" ToolTip="Export PNG">
                             <StackPanel Orientation="Horizontal">
                                 <controls:SvgIcon Source="Assets/Icons/Tabler/download.svg" IconBrush="{StaticResource TextBrush}" Width="16" Height="16" Margin="0,0,8,0" />
@@ -232,6 +238,11 @@
                                            Margin="0,6,0,0"
                                            Foreground="{StaticResource MutedTextBrush}"
                                            Text="Open a PNG, JPG, BMP, or GIF to begin." />
+                                <TextBlock x:Name="SpriteContextText"
+                                           Margin="0,6,0,0"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="No sprite sidecar loaded." />
                                 <ComboBox x:Name="RecentFilesComboBox"
                                           Margin="0,12,0,0"
                                           SelectionChanged="RecentFilesComboBox_SelectionChanged" />
@@ -548,6 +559,131 @@
                                            Foreground="{StaticResource MutedTextBrush}"
                                            TextWrapping="Wrap"
                                            Text="Local assistant uses image transparency, validation, and known slice-edit commands." />
+                            </StackPanel>
+                        </controls:SliceSkinPanel>
+
+                        <controls:SliceSkinPanel Style="{StaticResource SkinnedCardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Unity Runtime"
+                                           Foreground="{StaticResource TextBrush}"
+                                           FontSize="18"
+                                           FontWeight="SemiBold" />
+                                <TextBlock x:Name="UnityRuntimeSummaryText"
+                                           Margin="0,10,0,0"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="SpriteRenderer: 6.4 x 3.6 units at 100 PPU. Pivot sprite center. Unity metadata will appear here." />
+
+                                <Grid Margin="0,14,0,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="96" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,8">
+                                        <TextBlock Text="Tint (AARRGGBB or RRGGBB)" Style="{StaticResource LabelStyle}" />
+                                        <TextBox x:Name="UnityTintTextBox"
+                                                 LostFocus="UnityRuntimeTextBoxCommitted"
+                                                 KeyDown="UnityRuntimeTextBox_KeyDown"
+                                                 Text="#FFFFFFFF" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,8">
+                                        <TextBlock Text="Pixels Per Unit" Style="{StaticResource LabelStyle}" />
+                                        <TextBox x:Name="PixelsPerUnitTextBox"
+                                                 LostFocus="UnityRuntimeTextBoxCommitted"
+                                                 KeyDown="UnityRuntimeTextBox_KeyDown"
+                                                 Text="100" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,8">
+                                        <TextBlock Text="Sorting Layer" Style="{StaticResource LabelStyle}" />
+                                        <TextBox x:Name="SortingLayerTextBox"
+                                                 LostFocus="UnityRuntimeTextBoxCommitted"
+                                                 KeyDown="UnityRuntimeTextBox_KeyDown"
+                                                 Text="Default" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                                        <TextBlock Text="Sorting Order" Style="{StaticResource LabelStyle}" />
+                                        <TextBox x:Name="SortingOrderTextBox"
+                                                 LostFocus="UnityRuntimeTextBoxCommitted"
+                                                 KeyDown="UnityRuntimeTextBox_KeyDown"
+                                                 Text="0" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="2" Grid.ColumnSpan="2">
+                                        <TextBlock Text="Material" Style="{StaticResource LabelStyle}" />
+                                        <TextBox x:Name="MaterialNameTextBox"
+                                                 LostFocus="UnityRuntimeTextBoxCommitted"
+                                                 KeyDown="UnityRuntimeTextBox_KeyDown"
+                                                 Text="" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <WrapPanel Margin="0,12,0,0">
+                                    <CheckBox x:Name="UseSpritePivotCheckBox"
+                                              Content="Use sprite pivot"
+                                              Style="{StaticResource ToggleStyle}"
+                                              Checked="UnityRuntimeSettingChanged"
+                                              Unchecked="UnityRuntimeSettingChanged" />
+                                    <CheckBox x:Name="RaycastTargetCheckBox"
+                                              Content="Raycast target"
+                                              Style="{StaticResource ToggleStyle}"
+                                              Checked="UnityRuntimeSettingChanged"
+                                              Unchecked="UnityRuntimeSettingChanged" />
+                                </WrapPanel>
+
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                        <TextBlock Text="Custom Pivot X" Style="{StaticResource LabelStyle}" />
+                                        <TextBox x:Name="CustomPivotXTextBox"
+                                                 LostFocus="UnityRuntimeTextBoxCommitted"
+                                                 KeyDown="UnityRuntimeTextBox_KeyDown"
+                                                 Text="0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="Custom Pivot Y" Style="{StaticResource LabelStyle}" />
+                                        <TextBox x:Name="CustomPivotYTextBox"
+                                                 LostFocus="UnityRuntimeTextBoxCommitted"
+                                                 KeyDown="UnityRuntimeTextBox_KeyDown"
+                                                 Text="0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="Raycast Padding (Left, Bottom, Right, Top)"
+                                           Style="{StaticResource LabelStyle}"
+                                           Margin="0,10,0,6" />
+                                <UniformGrid Columns="4">
+                                    <TextBox x:Name="RaycastPaddingLeftTextBox"
+                                             Margin="0,0,8,8"
+                                             LostFocus="UnityRuntimeTextBoxCommitted"
+                                             KeyDown="UnityRuntimeTextBox_KeyDown"
+                                             Text="0" />
+                                    <TextBox x:Name="RaycastPaddingBottomTextBox"
+                                             Margin="0,0,8,8"
+                                             LostFocus="UnityRuntimeTextBoxCommitted"
+                                             KeyDown="UnityRuntimeTextBox_KeyDown"
+                                             Text="0" />
+                                    <TextBox x:Name="RaycastPaddingRightTextBox"
+                                             Margin="0,0,8,8"
+                                             LostFocus="UnityRuntimeTextBoxCommitted"
+                                             KeyDown="UnityRuntimeTextBox_KeyDown"
+                                             Text="0" />
+                                    <TextBox x:Name="RaycastPaddingTopTextBox"
+                                             Margin="0,0,0,8"
+                                             LostFocus="UnityRuntimeTextBoxCommitted"
+                                             KeyDown="UnityRuntimeTextBox_KeyDown"
+                                             Text="0" />
+                                </UniformGrid>
                             </StackPanel>
                         </controls:SliceSkinPanel>
 
