@@ -85,3 +85,6 @@ candy_pixel_art_gui/
 # Local generated asset audits.
 AssetAudits/
 
+# Local implementation worktrees.
+.worktrees/
+
