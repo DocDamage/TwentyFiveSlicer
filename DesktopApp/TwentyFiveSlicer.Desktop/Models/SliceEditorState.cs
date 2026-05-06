@@ -6,7 +6,8 @@ public sealed record SliceEditorState(
     double TargetWidth,
     double TargetHeight,
     SliceSegmentDefinition[]? XSegments = null,
-    SliceSegmentDefinition[]? YSegments = null)
+    SliceSegmentDefinition[]? YSegments = null,
+    SliceCellOverrideDefinition[]? CellOverrides = null)
 {
     public SliceEditorState Snapshot()
     {
@@ -16,6 +17,7 @@ public sealed record SliceEditorState(
             TargetWidth,
             TargetHeight,
             XSegments?.ToArray(),
-            YSegments?.ToArray());
+            YSegments?.ToArray(),
+            CellOverrides?.Select(overrideDefinition => overrideDefinition.Clone()).ToArray());
     }
 }

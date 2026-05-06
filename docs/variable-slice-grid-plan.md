@@ -27,13 +27,15 @@ Before coding starts, save the approved plan to `docs/variable-slice-grid-plan.m
 - Replace hardcoded four-guide controls with dynamic X/Y guide lists.
 - Add preview-driven editing:
   - drag existing guides
+  - click a rendered cell to select its X/Y segment pair
   - add X guide at cursor
   - add Y guide at cursor
   - remove selected guide
   - selected guide has stronger highlight
 - Add selected guide/segment panel:
-  - position in percent and pixels
+  - X/Y guide coordinate controls in percent and pixels
   - segment mode picker: fixed/stretch/hidden
+  - selected-cell source/target override controls keyed off the current X/Y segment selection
   - grid size display, for example `12 x 8 cells`
 - Keep current 25-slice presets by converting them into v2 guide sets.
 
@@ -56,11 +58,12 @@ Before coding starts, save the approved plan to `docs/variable-slice-grid-plan.m
 - Extra guides produce expected region counts.
 - Fixed/stretch/hidden modes behave correctly.
 - UI can construct with dynamic guide controls.
+- Preview cell picking selects the matching X/Y segment pair.
 - AI parser/review accepts variable-grid suggestions and rejects unsafe ones.
 - Debug and release EXEs build and launch.
 
 ## Assumptions
 - Save location: `docs/variable-slice-grid-plan.md`.
 - “Infinite” means user-facing unlimited guides with a hard safety cap of `100 x 100` cells.
-- Per-cell freeform overrides are deferred; variable X/Y guides ship first.
+- Cell boundaries are controlled by editable X/Y guides, with optional per-cell source/target rect overrides layered on top for desktop authoring.
 - The file extension remains `.25slice.json`.

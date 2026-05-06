@@ -720,7 +720,7 @@
                                            Margin="0,8,0,10"
                                            Foreground="{StaticResource MutedTextBrush}"
                                            TextWrapping="Wrap"
-                                           Text="5 x 5 cells" />
+                                           Text="Variable grid; add guides for more cells." />
                                 <TextBlock x:Name="SelectedGuideText"
                                            Margin="0,0,0,10"
                                            Foreground="{StaticResource MutedTextBrush}"
@@ -812,6 +812,139 @@
                                               Margin="0,0,0,8"
                                               SelectionChanged="SegmentModeComboBox_SelectionChanged" />
                                 </UniformGrid>
+                                <TextBlock Text="Selected cell"
+                                           Style="{StaticResource LabelStyle}"
+                                           Margin="0,8,0,6" />
+                                <TextBlock x:Name="SelectedCellText"
+                                           Margin="0,0,0,8"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="Select X and Y segments to edit one cell." />
+                                <CheckBox x:Name="CellSourceOverrideCheckBox"
+                                          Content="Override source rect"
+                                          Checked="CellOverrideSettingChanged"
+                                          Unchecked="CellOverrideSettingChanged" />
+                                <Grid Margin="0,6,0,8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="0"
+                                               Margin="0,0,8,4"
+                                               Style="{StaticResource LabelStyle}"
+                                               Text="X %" />
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="1"
+                                               Margin="0,0,8,4"
+                                               Style="{StaticResource LabelStyle}"
+                                               Text="Y %" />
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="2"
+                                               Margin="0,0,8,4"
+                                               Style="{StaticResource LabelStyle}"
+                                               Text="W %" />
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="3"
+                                               Style="{StaticResource LabelStyle}"
+                                               Text="H %" />
+
+                                    <TextBox x:Name="CellSourceXTextBox"
+                                             Grid.Row="1"
+                                             Grid.Column="0"
+                                             Margin="0,0,8,0"
+                                             LostFocus="CellOverrideTextBoxCommitted"
+                                             KeyDown="CellOverrideTextBox_KeyDown" />
+                                    <TextBox x:Name="CellSourceYTextBox"
+                                             Grid.Row="1"
+                                             Grid.Column="1"
+                                             Margin="0,0,8,0"
+                                             LostFocus="CellOverrideTextBoxCommitted"
+                                             KeyDown="CellOverrideTextBox_KeyDown" />
+                                    <TextBox x:Name="CellSourceWidthTextBox"
+                                             Grid.Row="1"
+                                             Grid.Column="2"
+                                             Margin="0,0,8,0"
+                                             LostFocus="CellOverrideTextBoxCommitted"
+                                             KeyDown="CellOverrideTextBox_KeyDown" />
+                                    <TextBox x:Name="CellSourceHeightTextBox"
+                                             Grid.Row="1"
+                                             Grid.Column="3"
+                                             LostFocus="CellOverrideTextBoxCommitted"
+                                             KeyDown="CellOverrideTextBox_KeyDown" />
+                                </Grid>
+                                <CheckBox x:Name="CellDestinationOverrideCheckBox"
+                                          Content="Override target rect"
+                                          Checked="CellOverrideSettingChanged"
+                                          Unchecked="CellOverrideSettingChanged" />
+                                <Grid Margin="0,6,0,8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="0"
+                                               Margin="0,0,8,4"
+                                               Style="{StaticResource LabelStyle}"
+                                               Text="X %" />
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="1"
+                                               Margin="0,0,8,4"
+                                               Style="{StaticResource LabelStyle}"
+                                               Text="Y %" />
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="2"
+                                               Margin="0,0,8,4"
+                                               Style="{StaticResource LabelStyle}"
+                                               Text="W %" />
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="3"
+                                               Style="{StaticResource LabelStyle}"
+                                               Text="H %" />
+
+                                    <TextBox x:Name="CellDestinationXTextBox"
+                                             Grid.Row="1"
+                                             Grid.Column="0"
+                                             Margin="0,0,8,0"
+                                             LostFocus="CellOverrideTextBoxCommitted"
+                                             KeyDown="CellOverrideTextBox_KeyDown" />
+                                    <TextBox x:Name="CellDestinationYTextBox"
+                                             Grid.Row="1"
+                                             Grid.Column="1"
+                                             Margin="0,0,8,0"
+                                             LostFocus="CellOverrideTextBoxCommitted"
+                                             KeyDown="CellOverrideTextBox_KeyDown" />
+                                    <TextBox x:Name="CellDestinationWidthTextBox"
+                                             Grid.Row="1"
+                                             Grid.Column="2"
+                                             Margin="0,0,8,0"
+                                             LostFocus="CellOverrideTextBoxCommitted"
+                                             KeyDown="CellOverrideTextBox_KeyDown" />
+                                    <TextBox x:Name="CellDestinationHeightTextBox"
+                                             Grid.Row="1"
+                                             Grid.Column="3"
+                                             LostFocus="CellOverrideTextBoxCommitted"
+                                             KeyDown="CellOverrideTextBox_KeyDown" />
+                                </Grid>
+                                <TextBlock x:Name="CellOverrideHintText"
+                                           Margin="0,0,0,6"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="Per-cell overrides are absolute percentages of the full source image and current preview target." />
                                 <TextBlock Margin="0,6,0,0"
                                            Foreground="{StaticResource MutedTextBrush}"
                                            TextWrapping="Wrap"
@@ -956,6 +1089,7 @@
                     Background="{StaticResource PanelBrush}">
                 <controls:TwentyFiveSlicePreviewControl x:Name="PreviewControl"
                                                         Margin="12"
+                                                        CellSelectionChanged="PreviewControl_CellSelectionChanged"
                                                         GuideEditChanged="PreviewControl_GuideEditChanged"
                                                         GuideSelectionChanged="PreviewControl_GuideSelectionChanged"
                                                         GuidePointerChanged="PreviewControl_GuidePointerChanged" />

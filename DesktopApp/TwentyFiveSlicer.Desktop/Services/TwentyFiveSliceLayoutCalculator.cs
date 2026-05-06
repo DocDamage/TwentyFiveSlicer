@@ -27,6 +27,7 @@ public static class TwentyFiveSliceLayoutCalculator
         double[] sourceHeights = GetOriginalSizes(yBordersPercent, sourceHeight);
         SliceSegmentDefinition[] xSegments = TwentyFiveSliceData.NormalizeSegments(sliceData.XSegments, sourceWidths.Length);
         SliceSegmentDefinition[] ySegments = TwentyFiveSliceData.NormalizeSegments(sliceData.YSegments, sourceHeights.Length);
+        SliceCellOverrideDefinition[] cellOverrides = TwentyFiveSliceData.NormalizeCellOverrides(sliceData.CellOverrides, sourceWidths.Length, sourceHeights.Length);
         double[] targetWidths = GetAdjustedSizes(Math.Max(0d, targetWidth), sourceWidths, xSegments);
         double[] targetHeights = GetAdjustedSizes(Math.Max(0d, targetHeight), sourceHeights, ySegments);
 
@@ -34,6 +35,7 @@ public static class TwentyFiveSliceLayoutCalculator
         double[] sourceYPositions = GetPositions(0d, sourceHeights);
         double[] targetXPositions = GetPositions(0d, targetWidths);
         double[] targetYPositions = GetPositions(0d, targetHeights);
+        var overrideMap = cellOverrides.ToDictionary(overrideDefinition => (overrideDefinition.Column, overrideDefinition.Row));
 
         var regions = new List<SliceRegion>(sourceWidths.Length * sourceHeights.Length);
         for (int row = 0; row < sourceHeights.Length; row++)
@@ -64,6 +66,19 @@ public static class TwentyFiveSliceLayoutCalculator
                     targetYPositions[row],
                     targetWidths[column],
                     targetHeights[row]);
+
+                if (overrideMap.TryGetValue((column, row), out SliceCellOverrideDefinition? overrideDefinition))
+                {
+                    if (overrideDefinition.SourceRectPercent is not null)
+                    {
+                        sourceRect = ResolveRectOverride(overrideDefinition.SourceRectPercent, sourceWidth, sourceHeight);
+                    }
+
+                    if (overrideDefinition.DestinationRectPercent is not null)
+                    {
+                        destinationRect = ResolveRectOverride(overrideDefinition.DestinationRectPercent, Math.Max(0d, targetWidth), Math.Max(0d, targetHeight));
+                    }
+                }
 
                 if (sourceRect.IsEmpty || destinationRect.IsEmpty)
                 {
@@ -171,5 +186,14 @@ public static class TwentyFiveSliceLayoutCalculator
         }
 
         return positions;
+    }
+
+    private static FloatRect ResolveRectOverride(SliceCellRectOverride rectOverride, double totalWidth, double totalHeight)
+    {
+        return new FloatRect(
+            totalWidth * rectOverride.XPercent / 100d,
+            totalHeight * rectOverride.YPercent / 100d,
+            totalWidth * rectOverride.WidthPercent / 100d,
+            totalHeight * rectOverride.HeightPercent / 100d);
     }
 }

@@ -17,8 +17,10 @@ var tests = new (string Name, Action Test)[]
     ("Variable slice plan is saved", VariableSlicePlanIsSaved),
     ("Slice data upgrades legacy JSON to variable grid", SliceDataUpgradesLegacyJsonToVariableGrid),
     ("Slice data round trips variable grid", SliceDataRoundTripsVariableGrid),
+    ("Slice data round trips per-cell overrides", SliceDataRoundTripsPerCellOverrides),
     ("Layout calculator supports extra guides", LayoutCalculatorSupportsExtraGuides),
     ("Layout calculator skips hidden variable segments", LayoutCalculatorSkipsHiddenVariableSegments),
+    ("Layout calculator applies per-cell overrides", LayoutCalculatorAppliesPerCellOverrides),
     ("Layout calculator enforces variable grid cap", LayoutCalculatorEnforcesVariableGridCap),
     ("Layout calculator scales fixed regions when target is too small", LayoutCalculatorScalesFixedRegionsWhenTargetIsTooSmall),
     ("Layout calculator flips source regions without moving destinations", LayoutCalculatorFlipsSourceRegionsWithoutMovingDestinations),
@@ -29,11 +31,13 @@ var tests = new (string Name, Action Test)[]
     ("Preview control adjusts zoom from mouse wheel", PreviewControlAdjustsZoomFromMouseWheel),
     ("Preview control resets zoom", PreviewControlResetsZoomValue),
     ("Preview control accepts variable guide selection", PreviewControlAcceptsVariableGuideSelection),
+    ("Preview control accepts variable cell selection", PreviewControlAcceptsVariableCellSelection),
     ("Preview viewport clamps pan to visible overflow", PreviewViewportClampsPanToVisibleOverflow),
     ("Preview control resets zoom and pan", PreviewControlResetsZoomAndPan),
     ("SliceGuideInteraction detects intersection before single guides", SliceGuideInteractionDetectsIntersectionBeforeSingleGuides),
     ("SliceGuideInteraction detects variable guides beyond original four", SliceGuideInteractionDetectsVariableGuidesBeyondOriginalFour),
     ("SliceGuideInteraction converts point to guide percent", SliceGuideInteractionConvertsPointToGuidePercent),
+    ("SliceCellInteraction detects rendered cells", SliceCellInteractionDetectsRenderedCells),
     ("Slice data JSON stays Unity compatible", SliceDataJsonStaysUnityCompatible),
     ("Sprite sidecar crops atlas using Unity coordinates", SpriteSidecarCropsAtlasUsingUnityCoordinates),
     ("Sprite sidecar falls back to preferred context", SpriteSidecarFallsBackToPreferredContext),
@@ -153,7 +157,26 @@ if (failures > 0)
 static void SliceHistoryRestoresUndoAndRedoStates()
 {
     var history = new SliceHistory(new SliceEditorState([20d, 40d, 60d, 80d], [20d, 40d, 60d, 80d], 640d, 360d));
-    history.Push(new SliceEditorState([10d, 35d, 65d, 90d], [15d, 38d, 62d, 85d], 800d, 400d));
+    history.Push(new SliceEditorState(
+        [10d, 35d, 65d, 90d],
+        [15d, 38d, 62d, 85d],
+        800d,
+        400d,
+        CellOverrides:
+        [
+            new SliceCellOverrideDefinition
+            {
+                Column = 2,
+                Row = 1,
+                SourceRectPercent = new SliceCellRectOverride
+                {
+                    XPercent = 15d,
+                    YPercent = 20d,
+                    WidthPercent = 10d,
+                    HeightPercent = 12d
+                }
+            }
+        ]));
 
     Assert.True(history.CanUndo, "Undo should be available after pushing a new state.");
     SliceEditorState first = history.Undo();
@@ -162,6 +185,7 @@ static void SliceHistoryRestoresUndoAndRedoStates()
     Assert.True(history.CanRedo, "Redo should be available after undo.");
     SliceEditorState second = history.Redo();
     Assert.Equal(10d, second.VerticalBorders[0], "Redo should restore the pushed vertical border.");
+    Assert.Equal(1, second.CellOverrides!.Length, "Redo should restore per-cell overrides.");
 }
 
 static void ThirdPartyAssetNoticesMentionRequiredSources()
@@ -525,6 +549,7 @@ static void MainWindowExposesVariableGridControls()
     Assert.True(xaml.Contains("x:Name=\"SelectedGuideText\"", StringComparison.Ordinal), "Main window should show selected guide position and cursor state.");
     Assert.True(xaml.Contains("GuideSelectionChanged=\"PreviewControl_GuideSelectionChanged\"", StringComparison.Ordinal), "Preview should report guide selection to the variable-grid panel.");
     Assert.True(xaml.Contains("GuidePointerChanged=\"PreviewControl_GuidePointerChanged\"", StringComparison.Ordinal), "Preview should report cursor percentages for add-at-cursor guide creation.");
+    Assert.True(xaml.Contains("CellSelectionChanged=\"PreviewControl_CellSelectionChanged\"", StringComparison.Ordinal), "Preview should report clicked cells back to the variable-grid panel.");
     Assert.True(xaml.Contains("x:Name=\"XGuideComboBox\"", StringComparison.Ordinal), "Main window should expose a dynamic X guide list.");
     Assert.True(xaml.Contains("x:Name=\"YGuideComboBox\"", StringComparison.Ordinal), "Main window should expose a dynamic Y guide list.");
     Assert.True(xaml.Contains("x:Name=\"XGuidePercentBox\"", StringComparison.Ordinal), "Main window should let users edit any selected X guide percentage.");
@@ -534,6 +559,13 @@ static void MainWindowExposesVariableGridControls()
     Assert.True(xaml.Contains("Click=\"NudgeGuide_Click\"", StringComparison.Ordinal), "Main window should support precise guide nudging.");
     Assert.True(xaml.Contains("Tag=\"X:-0.1\"", StringComparison.Ordinal), "X guide controls should include fine negative nudging.");
     Assert.True(xaml.Contains("Tag=\"Y:0.1\"", StringComparison.Ordinal), "Y guide controls should include fine positive nudging.");
+    Assert.True(xaml.Contains("x:Name=\"SelectedCellText\"", StringComparison.Ordinal), "Main window should describe the currently selected cell.");
+    Assert.True(xaml.Contains("x:Name=\"CellSourceOverrideCheckBox\"", StringComparison.Ordinal), "Main window should let users enable per-cell source overrides.");
+    Assert.True(xaml.Contains("x:Name=\"CellDestinationOverrideCheckBox\"", StringComparison.Ordinal), "Main window should let users enable per-cell destination overrides.");
+    Assert.True(xaml.Contains("x:Name=\"CellSourceXTextBox\"", StringComparison.Ordinal), "Main window should expose per-cell source X editing.");
+    Assert.True(xaml.Contains("x:Name=\"CellDestinationWidthTextBox\"", StringComparison.Ordinal), "Main window should expose per-cell target width editing.");
+    Assert.True(xaml.Contains("Checked=\"CellOverrideSettingChanged\"", StringComparison.Ordinal), "Per-cell override toggles should commit immediately.");
+    Assert.True(xaml.Contains("LostFocus=\"CellOverrideTextBoxCommitted\"", StringComparison.Ordinal), "Per-cell override fields should commit on focus loss.");
 }
 
 static void MainWindowConstructsWithoutStartupEventCrash()
@@ -662,6 +694,44 @@ static void SliceDataRoundTripsVariableGrid()
     Assert.True(!json.Contains("verticalBorders", StringComparison.Ordinal), "V2 saves should prefer xGuidesPercent over legacy verticalBorders.");
 }
 
+static void SliceDataRoundTripsPerCellOverrides()
+{
+    var data = new TwentyFiveSliceData(
+        xGuidesPercent: [10d, 30d, 70d, 90d],
+        yGuidesPercent: [10d, 30d, 70d, 90d],
+        cellOverrides:
+        [
+            new SliceCellOverrideDefinition
+            {
+                Column = 2,
+                Row = 1,
+                SourceRectPercent = new SliceCellRectOverride
+                {
+                    XPercent = 15d,
+                    YPercent = 22d,
+                    WidthPercent = 18d,
+                    HeightPercent = 14d
+                },
+                DestinationRectPercent = new SliceCellRectOverride
+                {
+                    XPercent = 45d,
+                    YPercent = 35d,
+                    WidthPercent = 20d,
+                    HeightPercent = 16d
+                }
+            }
+        ]);
+
+    string json = JsonSerializer.Serialize(data);
+    TwentyFiveSliceData loaded = JsonSerializer.Deserialize<TwentyFiveSliceData>(json)!;
+
+    Assert.Equal(1, loaded.CellOverrides.Length, "Per-cell overrides should round trip.");
+    Assert.Equal(2, loaded.CellOverrides[0].Column, "Override column should round trip.");
+    Assert.Equal(1, loaded.CellOverrides[0].Row, "Override row should round trip.");
+    Assert.Equal(15d, loaded.CellOverrides[0].SourceRectPercent!.XPercent, "Source override X should round trip.");
+    Assert.Equal(16d, loaded.CellOverrides[0].DestinationRectPercent!.HeightPercent, "Destination override height should round trip.");
+}
+
 static void LayoutCalculatorSupportsExtraGuides()
 {
     var data = new TwentyFiveSliceData(
@@ -703,6 +773,56 @@ static void LayoutCalculatorSkipsHiddenVariableSegments()
     Assert.Equal(20, regions.Count, "Hidden X segment should remove one full column of five regions.");
     Assert.True(!regions.Any(region => region.Column == 1), "Hidden column should not produce render regions.");
     Assert.True(regions.Where(region => region.Column > 1).All(region => region.Destination.X >= 20d), "Columns after hidden segment should close the gap.");
+}
+
+static void LayoutCalculatorAppliesPerCellOverrides()
+{
+    var data = new TwentyFiveSliceData(
+        xGuidesPercent: [10d, 30d, 70d, 90d],
+        yGuidesPercent: [10d, 30d, 70d, 90d],
+        cellOverrides:
+        [
+            new SliceCellOverrideDefinition
+            {
+                Column = 2,
+                Row = 2,
+                SourceRectPercent = new SliceCellRectOverride
+                {
+                    XPercent = 15d,
+                    YPercent = 25d,
+                    WidthPercent = 10d,
+                    HeightPercent = 12d
+                },
+                DestinationRectPercent = new SliceCellRectOverride
+                {
+                    XPercent = 45d,
+                    YPercent = 35d,
+                    WidthPercent = 20d,
+                    HeightPercent = 18d
+                }
+            }
+        ]);
+
+    IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(
+        sourceWidth: 100d,
+        sourceHeight: 100d,
+        targetWidth: 160d,
+        targetHeight: 120d,
+        data);
+
+    SliceRegion overridden = regions.Single(region => region.Column == 2 && region.Row == 2);
+    SliceRegion neighbor = regions.Single(region => region.Column == 1 && region.Row == 2);
+
+    Assert.Equal(15d, overridden.Source.X, "Source override should replace the shared-grid X position for the selected cell.");
+    Assert.Equal(25d, overridden.Source.Y, "Source override should replace the shared-grid Y position for the selected cell.");
+    Assert.Equal(10d, overridden.Source.Width, "Source override should replace the shared-grid width for the selected cell.");
+    Assert.Equal(12d, overridden.Source.Height, "Source override should replace the shared-grid height for the selected cell.");
+    Assert.Equal(72d, overridden.Destination.X, "Destination override should replace the shared-grid X position for the selected cell.");
+    Assert.Equal(42d, overridden.Destination.Y, "Destination override should replace the shared-grid Y position for the selected cell.");
+    Assert.Equal(32d, overridden.Destination.Width, "Destination override should replace the shared-grid width for the selected cell.");
+    Assert.Equal(21.6d, overridden.Destination.Height, "Destination override should replace the shared-grid height for the selected cell.");
+    Assert.Equal(10d, neighbor.Source.X, "Neighboring cells should continue to use the shared-guide layout.");
+    Assert.Equal(50d, neighbor.Destination.Width, "Neighboring cells should keep the shared-guide destination width.");
 }
 
 static void LayoutCalculatorEnforcesVariableGridCap()
@@ -886,6 +1006,41 @@ static void PreviewControlAcceptsVariableGuideSelection()
         preview.SelectGuide(isVertical: false, index: 4);
         preview.SelectGuide(isVertical: true, index: 99);
     });
+}
+
+static void PreviewControlAcceptsVariableCellSelection()
+{
+    RunOnStaThread(() =>
+    {
+        var preview = new TwentyFiveSlicePreviewControl
+        {
+            SliceData = new TwentyFiveSliceData([10d, 20d, 30d, 40d, 50d, 60d], [15d, 30d, 45d, 60d, 75d])
+        };
+
+        preview.SelectCell(5, 4);
+        preview.SelectCell(99, 99);
+    });
+}
+
+static void SliceCellInteractionDetectsRenderedCells()
+{
+    var data = new TwentyFiveSliceData([10d, 30d, 70d, 90d], [10d, 30d, 70d, 90d]);
+    IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(
+        sourceWidth: 100d,
+        sourceHeight: 100d,
+        targetWidth: 160d,
+        targetHeight: 120d,
+        data);
+
+    SliceCellHit hit = SliceCellInteraction.HitTest(
+        new Rect(20d, 10d, 160d, 120d),
+        scale: 1d,
+        regions,
+        new Point(85d, 55d));
+
+    Assert.Equal(2, hit.Column, "Hit testing should resolve the clicked preview column.");
+    Assert.Equal(2, hit.Row, "Hit testing should resolve the clicked preview row.");
+    Assert.Equal(false, SliceCellInteraction.HitTest(new Rect(20d, 10d, 160d, 120d), 1d, regions, new Point(5d, 5d)).HasValue, "Points outside the preview should not select a cell.");
 }
 
 static void SpriteSidecarCropsAtlasUsingUnityCoordinates()
@@ -1226,6 +1381,21 @@ static void DesktopHandoffPreflightFlagsUnityIncompatibleGrids()
             new SliceSegmentDefinition(SliceSegmentMode.Fixed),
             new SliceSegmentDefinition(SliceSegmentMode.Stretch),
             new SliceSegmentDefinition(SliceSegmentMode.Fixed)
+        ],
+        cellOverrides:
+        [
+            new SliceCellOverrideDefinition
+            {
+                Column = 0,
+                Row = 0,
+                SourceRectPercent = new SliceCellRectOverride
+                {
+                    XPercent = 1d,
+                    YPercent = 2d,
+                    WidthPercent = 10d,
+                    HeightPercent = 11d
+                }
+            }
         ]);
 
     UnityImportCompatibilityReport report = DesktopHandoffEnvelopeService.EvaluateUnityImportCompatibility(data);
@@ -1234,6 +1404,7 @@ static void DesktopHandoffPreflightFlagsUnityIncompatibleGrids()
     Assert.Contains(report.Issues, issue => issue.Contains("exactly four X guides and four Y guides", StringComparison.Ordinal));
     Assert.Contains(report.Issues, issue => issue.Contains("X segment layouts with 5 entries", StringComparison.Ordinal));
     Assert.Contains(report.Issues, issue => issue.Contains("default 25-slice Y segment pattern", StringComparison.Ordinal));
+    Assert.Contains(report.Issues, issue => issue.Contains("per-cell freeform overrides", StringComparison.OrdinalIgnoreCase));
 }
 
 static void UnityRuntimeSummaryUsesImportedSpritePivot()
@@ -1740,7 +1911,24 @@ static void AppStateStoreRoundTripsLastSession()
             ImagePath = @"C:\art\button.png",
             HandoffTargetKind = "twentyFiveSliceSpriteRenderer",
             HandoffTargetName = "PlayButton",
-            SliceData = new TwentyFiveSliceData([12d, 40d, 60d, 88d], [10d, 42d, 58d, 90d]),
+            SliceData = new TwentyFiveSliceData(
+                [12d, 40d, 60d, 88d],
+                [10d, 42d, 58d, 90d],
+                cellOverrides:
+                [
+                    new SliceCellOverrideDefinition
+                    {
+                        Column = 1,
+                        Row = 3,
+                        DestinationRectPercent = new SliceCellRectOverride
+                        {
+                            XPercent = 40d,
+                            YPercent = 55d,
+                            WidthPercent = 20d,
+                            HeightPercent = 18d
+                        }
+                    }
+                ]),
             SpriteContext = new SpriteAssetContext
             {
                 SpriteName = "ButtonGreen",
@@ -1817,6 +2005,8 @@ static void AppStateStoreRoundTripsLastSession()
         Assert.Equal(true, session.KeepAspect, "Toggle state should round trip.");
         Assert.Equal(false, session.CandySkinEnabled, "Candy skin state should round trip.");
         Assert.Equal(88d, session.SliceData.VerticalBorders[3], "Slice data should round trip.");
+        Assert.Equal(1, session.SliceData.CellOverrides.Length, "Per-cell overrides should round trip in session state.");
+        Assert.Equal(40d, session.SliceData.CellOverrides[0].DestinationRectPercent!.XPercent, "Per-cell destination overrides should round trip in session state.");
         Assert.Equal("#FF3366CC", session.UnityRuntime.TintHex, "Unity tint should round trip.");
         Assert.Equal(64d, session.UnityRuntime.PixelsPerUnit, "Pixels per unit should round trip.");
         Assert.Equal(false, session.UnityRuntime.UseSpritePivot, "Pivot mode should round trip.");

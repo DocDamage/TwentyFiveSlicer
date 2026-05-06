@@ -4,7 +4,7 @@
 Bring the standalone desktop app to practical parity with the Unity package for the features that matter during authoring, validation, and handoff, without pretending the desktop app can directly replace a live Unity scene.
 
 ## Current Gap
-- The desktop app is stronger at authoring workflows, AI, batch checks, and variable-grid editing.
+- The desktop app is stronger at authoring workflows, AI, batch checks, variable-grid editing, and desktop-only per-cell override workflows.
 - The Unity package is still stronger at Unity-native component configuration, sprite asset context, hierarchy creation, and project-side data ownership.
 
 ## Scope
@@ -18,6 +18,7 @@ Bring the standalone desktop app to practical parity with the Unity package for 
   - combined handoff-envelope import/export between Unity and the desktop app
   - Unity-side apply flow back into `SliceDataMap` and compatible selected components
   - desktop export-time preflight warnings that mirror Unity's fixed 25-slice importer constraints
+  - desktop per-cell source/target rect overrides with direct preview cell picking
 - Remaining:
   - component-aware authoring presets and profiles in the desktop app
   - broader validation parity beyond handoff compatibility warnings

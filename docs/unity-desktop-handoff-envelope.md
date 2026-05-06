@@ -99,6 +99,7 @@ By default it saves next to the selected sprite texture and suggests a file name
 
 - Root `schemaVersion` is the handoff-envelope version.
 - `sliceData.schemaVersion` is the desktop slice schema version and currently exports as `2`.
+- `sliceData.cellOverrides` is optional desktop-only metadata for per-cell source/target rect overrides.
 - Unity's fixed 25-slice data is exported into desktop variable-grid format using the default five-segment pattern:
   - `fixed`
   - `stretch`
@@ -124,7 +125,7 @@ When the referenced texture can be resolved locally, the desktop app also loads 
 
 The desktop app can now export the reviewed state back to a combined handoff envelope through the main toolbar's `Export Handoff` action. That export preserves imported `targetKind` and `targetName` metadata when present and otherwise defaults to a `spriteAsset` target derived from the current source image or sprite context.
 
-Before writing the file, the desktop export runs the same fixed-layout compatibility check that Unity uses during import. If the current variable-grid data would be rejected by Unity, the desktop app warns the user and explains why before allowing the export to continue.
+Before writing the file, the desktop export runs the same fixed-layout compatibility check that Unity uses during import. If the current variable-grid data or desktop-only `cellOverrides` would be rejected by Unity, the desktop app warns the user and explains why before allowing the export to continue.
 
 Unity can now import the reviewed handoff envelope back onto the currently selected target as well. The Unity importer:
 
@@ -145,7 +146,7 @@ The Unity package still renders only the fixed 25-slice layout. Because of that,
   - `stretch`
   - `fixed`
 
-If a desktop envelope contains arbitrary variable-grid guides or non-default segment modes, Unity import rejects it instead of silently misapplying it.
+If a desktop envelope contains arbitrary variable-grid guides, non-default segment modes, or `cellOverrides`, Unity import rejects it instead of silently misapplying it.
 
 The desktop app mirrors these same constraints as an export-time preflight warning so unsupported envelopes are called out before they are sent back to Unity.
 

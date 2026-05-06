@@ -67,7 +67,8 @@ public sealed class SliceHistory
             left.VerticalBorders.SequenceEqual(right.VerticalBorders) &&
             left.HorizontalBorders.SequenceEqual(right.HorizontalBorders) &&
             SegmentModesEqual(left.XSegments, right.XSegments) &&
-            SegmentModesEqual(left.YSegments, right.YSegments);
+            SegmentModesEqual(left.YSegments, right.YSegments) &&
+            CellOverridesEqual(left.CellOverrides, right.CellOverrides);
     }
 
     private static bool SegmentModesEqual(IReadOnlyList<SliceSegmentDefinition>? left, IReadOnlyList<SliceSegmentDefinition>? right)
@@ -78,5 +79,49 @@ public sealed class SliceHistory
         }
 
         return left.Select(segment => segment.Mode).SequenceEqual(right.Select(segment => segment.Mode));
+    }
+
+    private static bool CellOverridesEqual(IReadOnlyList<SliceCellOverrideDefinition>? left, IReadOnlyList<SliceCellOverrideDefinition>? right)
+    {
+        if (left is null || right is null)
+        {
+            return left is null && right is null;
+        }
+
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < left.Count; index++)
+        {
+            SliceCellOverrideDefinition leftOverride = left[index];
+            SliceCellOverrideDefinition rightOverride = right[index];
+            if (leftOverride.Column != rightOverride.Column || leftOverride.Row != rightOverride.Row)
+            {
+                return false;
+            }
+
+            if (!RectOverridesEqual(leftOverride.SourceRectPercent, rightOverride.SourceRectPercent) ||
+                !RectOverridesEqual(leftOverride.DestinationRectPercent, rightOverride.DestinationRectPercent))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool RectOverridesEqual(SliceCellRectOverride? left, SliceCellRectOverride? right)
+    {
+        if (left is null || right is null)
+        {
+            return left is null && right is null;
+        }
+
+        return Math.Abs(left.XPercent - right.XPercent) < 0.001d &&
+            Math.Abs(left.YPercent - right.YPercent) < 0.001d &&
+            Math.Abs(left.WidthPercent - right.WidthPercent) < 0.001d &&
+            Math.Abs(left.HeightPercent - right.HeightPercent) < 0.001d;
     }
 }

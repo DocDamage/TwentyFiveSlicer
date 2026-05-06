@@ -59,6 +59,11 @@ public static class DesktopHandoffEnvelopeService
             issues.Add("Unity currently supports importing only fixed 25-slice envelopes with exactly four X guides and four Y guides.");
         }
 
+        if (sliceData.CellOverrides.Length > 0)
+        {
+            issues.Add("Unity does not support the desktop app's per-cell freeform overrides.");
+        }
+
         AppendSegmentPatternIssue(sliceData.XSegments, "X", issues);
         AppendSegmentPatternIssue(sliceData.YSegments, "Y", issues);
         return new UnityImportCompatibilityReport(issues.Count == 0, issues);

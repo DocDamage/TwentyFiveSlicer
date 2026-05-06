@@ -25,6 +25,9 @@ public sealed class TwentyFiveSliceData : IJsonOnDeserialized
     [JsonPropertyName("ySegments")]
     public SliceSegmentDefinition[] YSegments { get; set; }
 
+    [JsonPropertyName("cellOverrides")]
+    public SliceCellOverrideDefinition[] CellOverrides { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
@@ -59,18 +62,20 @@ public sealed class TwentyFiveSliceData : IJsonOnDeserialized
         IEnumerable<double>? xGuidesPercent,
         IEnumerable<double>? yGuidesPercent,
         IEnumerable<SliceSegmentDefinition>? xSegments = null,
-        IEnumerable<SliceSegmentDefinition>? ySegments = null)
+        IEnumerable<SliceSegmentDefinition>? ySegments = null,
+        IEnumerable<SliceCellOverrideDefinition>? cellOverrides = null)
     {
         SchemaVersion = CurrentSchemaVersion;
         XGuidesPercent = NormalizeAxis(xGuidesPercent);
         YGuidesPercent = NormalizeAxis(yGuidesPercent);
         XSegments = NormalizeSegments(xSegments, XGuidesPercent.Length + 1);
         YSegments = NormalizeSegments(ySegments, YGuidesPercent.Length + 1);
+        CellOverrides = NormalizeCellOverrides(cellOverrides, XGuidesPercent.Length + 1, YGuidesPercent.Length + 1);
     }
 
     public TwentyFiveSliceData Clone()
     {
-        return new TwentyFiveSliceData(XGuidesPercent, YGuidesPercent, XSegments, YSegments);
+        return new TwentyFiveSliceData(XGuidesPercent, YGuidesPercent, XSegments, YSegments, CellOverrides.Select(overrideDefinition => overrideDefinition.Clone()));
     }
 
     public static TwentyFiveSliceData CreateDefault()
@@ -102,6 +107,7 @@ public sealed class TwentyFiveSliceData : IJsonOnDeserialized
         YGuidesPercent = NormalizeAxis(YGuidesPercent);
         XSegments = NormalizeSegments(XSegments, XGuidesPercent.Length + 1);
         YSegments = NormalizeSegments(YSegments, YGuidesPercent.Length + 1);
+        CellOverrides = NormalizeCellOverrides(CellOverrides, XGuidesPercent.Length + 1, YGuidesPercent.Length + 1);
     }
 
     public static double[] NormalizeAxis(IEnumerable<double>? guides)
@@ -165,6 +171,52 @@ public sealed class TwentyFiveSliceData : IJsonOnDeserialized
         }
     }
 
+    public static SliceCellOverrideDefinition[] NormalizeCellOverrides(
+        IEnumerable<SliceCellOverrideDefinition>? overrides,
+        int columnCount,
+        int rowCount)
+    {
+        if (overrides is null)
+        {
+            return [];
+        }
+
+        var normalized = new Dictionary<(int Column, int Row), SliceCellOverrideDefinition>();
+        foreach (SliceCellOverrideDefinition? overrideDefinition in overrides)
+        {
+            if (overrideDefinition is null)
+            {
+                continue;
+            }
+
+            if (overrideDefinition.Column < 0 || overrideDefinition.Column >= columnCount ||
+                overrideDefinition.Row < 0 || overrideDefinition.Row >= rowCount)
+            {
+                continue;
+            }
+
+            SliceCellRectOverride? sourceRect = NormalizeRectOverride(overrideDefinition.SourceRectPercent);
+            SliceCellRectOverride? destinationRect = NormalizeRectOverride(overrideDefinition.DestinationRectPercent);
+            if (sourceRect is null && destinationRect is null)
+            {
+                continue;
+            }
+
+            normalized[(overrideDefinition.Column, overrideDefinition.Row)] = new SliceCellOverrideDefinition
+            {
+                Column = overrideDefinition.Column,
+                Row = overrideDefinition.Row,
+                SourceRectPercent = sourceRect,
+                DestinationRectPercent = destinationRect
+            };
+        }
+
+        return normalized.Values
+            .OrderBy(overrideDefinition => overrideDefinition.Row)
+            .ThenBy(overrideDefinition => overrideDefinition.Column)
+            .ToArray();
+    }
+
     private static SliceSegmentDefinition[] BuildDefaultSegments(int count)
     {
         var segments = new SliceSegmentDefinition[count];
@@ -210,5 +262,30 @@ public sealed class TwentyFiveSliceData : IJsonOnDeserialized
     private static double ClampToPercent(double value)
     {
         return Math.Clamp(value, 0d, 100d);
+    }
+
+    private static SliceCellRectOverride? NormalizeRectOverride(SliceCellRectOverride? rect)
+    {
+        if (rect is null)
+        {
+            return null;
+        }
+
+        double x = ClampToPercent(rect.XPercent);
+        double y = ClampToPercent(rect.YPercent);
+        double width = Math.Clamp(rect.WidthPercent, 0d, 100d - x);
+        double height = Math.Clamp(rect.HeightPercent, 0d, 100d - y);
+        if (width <= 0d || height <= 0d)
+        {
+            return null;
+        }
+
+        return new SliceCellRectOverride
+        {
+            XPercent = Math.Round(x, 3),
+            YPercent = Math.Round(y, 3),
+            WidthPercent = Math.Round(width, 3),
+            HeightPercent = Math.Round(height, 3)
+        };
     }
 }

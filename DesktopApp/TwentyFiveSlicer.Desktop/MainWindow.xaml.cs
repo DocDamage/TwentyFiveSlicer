@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private double[] _horizontalBorders = { 20d, 40d, 60d, 80d };
     private SliceSegmentDefinition[] _xSegments = TwentyFiveSliceData.NormalizeSegments(null, 5);
     private SliceSegmentDefinition[] _ySegments = TwentyFiveSliceData.NormalizeSegments(null, 5);
+    private SliceCellOverrideDefinition[] _cellOverrides = [];
     private Slider[] _verticalSliders = Array.Empty<Slider>();
     private Slider[] _horizontalSliders = Array.Empty<Slider>();
     private TextBlock[] _verticalValueTexts = Array.Empty<TextBlock>();
@@ -817,6 +818,28 @@ public partial class MainWindow : Window
         RememberCurrentState();
     }
 
+    private void CellOverrideSettingChanged(object sender, RoutedEventArgs e)
+    {
+        CommitCellOverrideFromUi();
+    }
+
+    private void CellOverrideTextBoxCommitted(object sender, RoutedEventArgs e)
+    {
+        CommitCellOverrideFromUi();
+    }
+
+    private void CellOverrideTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        CommitCellOverrideFromUi();
+        Keyboard.ClearFocus();
+        e.Handled = true;
+    }
+
     private void PresetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_isUpdatingUi || PresetComboBox.SelectedItem is not string presetName || !_presetLibrary.TryGetValue(presetName, out TwentyFiveSliceData? data))
@@ -976,6 +999,23 @@ public partial class MainWindow : Window
 
         UpdateSelectedGuideText();
         RefreshGuideControls();
+    }
+
+    private void PreviewControl_CellSelectionChanged(object? sender, SliceCellSelectionEventArgs e)
+    {
+        bool wasUpdating = _isUpdatingUi;
+        _isUpdatingUi = true;
+        try
+        {
+            XSegmentComboBox.SelectedIndex = e.Column;
+            YSegmentComboBox.SelectedIndex = e.Row;
+        }
+        finally
+        {
+            _isUpdatingUi = wasUpdating;
+        }
+
+        SyncSelectedSegmentModeControls();
     }
 
     private void PreviewControl_GuidePointerChanged(object? sender, SliceGuidePointerEventArgs e)
@@ -1213,6 +1253,7 @@ public partial class MainWindow : Window
         _horizontalBorders = TwentyFiveSliceData.NormalizeAxis(data.HorizontalBorders);
         _xSegments = TwentyFiveSliceData.NormalizeSegments(data.XSegments, _verticalBorders.Length + 1);
         _ySegments = TwentyFiveSliceData.NormalizeSegments(data.YSegments, _horizontalBorders.Length + 1);
+        _cellOverrides = TwentyFiveSliceData.NormalizeCellOverrides(data.CellOverrides, _verticalBorders.Length + 1, _horizontalBorders.Length + 1);
 
         ApplyBorderStateToUi();
         UpdatePreview();
@@ -1224,6 +1265,7 @@ public partial class MainWindow : Window
         NormalizeBorders(_horizontalBorders);
         _xSegments = TwentyFiveSliceData.NormalizeSegments(_xSegments, _verticalBorders.Length + 1);
         _ySegments = TwentyFiveSliceData.NormalizeSegments(_ySegments, _horizontalBorders.Length + 1);
+        _cellOverrides = TwentyFiveSliceData.NormalizeCellOverrides(_cellOverrides, _verticalBorders.Length + 1, _horizontalBorders.Length + 1);
         _selectedXGuideIndex = _selectedXGuideIndex >= _verticalBorders.Length ? -1 : _selectedXGuideIndex;
         _selectedYGuideIndex = _selectedYGuideIndex >= _horizontalBorders.Length ? -1 : _selectedYGuideIndex;
 
@@ -1304,11 +1346,14 @@ public partial class MainWindow : Window
             YSegmentModeComboBox.SelectedItem = YSegmentComboBox.SelectedIndex >= 0 && YSegmentComboBox.SelectedIndex < _ySegments.Length
                 ? _ySegments[YSegmentComboBox.SelectedIndex].Mode
                 : null;
+            PreviewControl.SelectCell(XSegmentComboBox.SelectedIndex, YSegmentComboBox.SelectedIndex);
         }
         finally
         {
             _isUpdatingUi = wasUpdating;
         }
+
+        RefreshCellOverrideControls();
     }
 
     private void RefreshGuideControls()
@@ -1390,7 +1435,7 @@ public partial class MainWindow : Window
         PreviewZoomValueText.Text = $"{PreviewZoomSlider.Value * 100d:0}%";
 
         PreviewControl.SourceImage = _sourceImage;
-        PreviewControl.SliceData = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders, _xSegments, _ySegments);
+        PreviewControl.SliceData = CreateCurrentSliceData();
         PreviewControl.TargetWidth = TargetWidthSlider.Value;
         PreviewControl.TargetHeight = TargetHeightSlider.Value;
         PreviewControl.PreviewZoom = PreviewZoomSlider.Value;
@@ -1404,6 +1449,7 @@ public partial class MainWindow : Window
         PreviewSummaryText.Text = _sourceImage is null
             ? "Load an image to render the 25-slice layout."
             : $"{_sourceImage.PixelWidth} x {_sourceImage.PixelHeight} source -> {TargetWidthSlider.Value:0} x {TargetHeightSlider.Value:0} preview";
+        RefreshCellOverrideControls();
         UpdateValidation();
     }
 
@@ -1460,8 +1506,7 @@ public partial class MainWindow : Window
 
     private string CreateSliceJson()
     {
-        var data = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders, _xSegments, _ySegments);
-        return JsonSerializer.Serialize(data, JsonOptions);
+        return JsonSerializer.Serialize(CreateCurrentSliceData(), JsonOptions);
     }
 
     private DesktopHandoffEnvelope CreateCurrentDesktopHandoffEnvelope()
@@ -1718,7 +1763,8 @@ public partial class MainWindow : Window
             TargetWidthSlider.Value,
             TargetHeightSlider.Value,
             _xSegments.ToArray(),
-            _ySegments.ToArray());
+            _ySegments.ToArray(),
+            _cellOverrides.Select(overrideDefinition => overrideDefinition.Clone()).ToArray());
     }
 
     private void ApplyEditorState(SliceEditorState state)
@@ -1727,6 +1773,7 @@ public partial class MainWindow : Window
         _horizontalBorders = TwentyFiveSliceData.NormalizeAxis(state.HorizontalBorders);
         _xSegments = TwentyFiveSliceData.NormalizeSegments(state.XSegments, _verticalBorders.Length + 1);
         _ySegments = TwentyFiveSliceData.NormalizeSegments(state.YSegments, _horizontalBorders.Length + 1);
+        _cellOverrides = TwentyFiveSliceData.NormalizeCellOverrides(state.CellOverrides, _verticalBorders.Length + 1, _horizontalBorders.Length + 1);
         SetTargetSize(state.TargetWidth, state.TargetHeight);
         ApplyBorderStateToUi();
         UpdatePreview();
@@ -2030,7 +2077,7 @@ public partial class MainWindow : Window
 
     private TwentyFiveSliceData CreateCurrentSliceData()
     {
-        return new TwentyFiveSliceData(_verticalBorders, _horizontalBorders, _xSegments, _ySegments);
+        return new TwentyFiveSliceData(_verticalBorders, _horizontalBorders, _xSegments, _ySegments, _cellOverrides);
     }
 
     private UnityRuntimeSettings CreateCurrentUnityRuntimeSettings()
@@ -2050,6 +2097,7 @@ public partial class MainWindow : Window
         builder.AppendLine($"Y guides: {string.Join(", ", _horizontalBorders.Select(value => $"{value:0.#}%"))}");
         builder.AppendLine($"X segment modes: {string.Join(", ", _xSegments.Select(segment => segment.Mode.ToString().ToLowerInvariant()))}");
         builder.AppendLine($"Y segment modes: {string.Join(", ", _ySegments.Select(segment => segment.Mode.ToString().ToLowerInvariant()))}");
+        builder.AppendLine($"Per-cell overrides: {_cellOverrides.Length}");
         builder.AppendLine($"Debug overlay: {DebuggingViewCheckBox.IsChecked == true}; source guides: {SourceComparisonCheckBox.IsChecked == true}; flip X: {FlipXCheckBox.IsChecked == true}; flip Y: {FlipYCheckBox.IsChecked == true}");
         builder.AppendLine("Return concise advice. If edits are recommended, include exact JSON with schemaVersion: 2, xGuidesPercent, yGuidesPercent, xSegments, and ySegments. Segment mode must be fixed, stretch, or hidden. Keep guides ordered, unique, and within 0-100.");
 
@@ -2448,6 +2496,267 @@ public partial class MainWindow : Window
 
         RefreshUnityRuntimeControls();
         UpdatePreview();
+    }
+
+    private void CommitCellOverrideFromUi()
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        if (!TryGetSelectedCellBaseRects(out int column, out int row, out SliceCellRectOverride baseSourceRect, out SliceCellRectOverride baseDestinationRect, out _))
+        {
+            RefreshCellOverrideControls();
+            return;
+        }
+
+        SliceCellOverrideDefinition? existingOverride = FindCellOverride(column, row);
+        SliceCellRectOverride? sourceRect = CellSourceOverrideCheckBox.IsChecked == true
+            ? new SliceCellRectOverride
+            {
+                XPercent = ParseDoubleOrDefault(CellSourceXTextBox.Text, existingOverride?.SourceRectPercent?.XPercent ?? baseSourceRect.XPercent),
+                YPercent = ParseDoubleOrDefault(CellSourceYTextBox.Text, existingOverride?.SourceRectPercent?.YPercent ?? baseSourceRect.YPercent),
+                WidthPercent = ParseDoubleOrDefault(CellSourceWidthTextBox.Text, existingOverride?.SourceRectPercent?.WidthPercent ?? baseSourceRect.WidthPercent),
+                HeightPercent = ParseDoubleOrDefault(CellSourceHeightTextBox.Text, existingOverride?.SourceRectPercent?.HeightPercent ?? baseSourceRect.HeightPercent)
+            }
+            : null;
+        SliceCellRectOverride? destinationRect = CellDestinationOverrideCheckBox.IsChecked == true
+            ? new SliceCellRectOverride
+            {
+                XPercent = ParseDoubleOrDefault(CellDestinationXTextBox.Text, existingOverride?.DestinationRectPercent?.XPercent ?? baseDestinationRect.XPercent),
+                YPercent = ParseDoubleOrDefault(CellDestinationYTextBox.Text, existingOverride?.DestinationRectPercent?.YPercent ?? baseDestinationRect.YPercent),
+                WidthPercent = ParseDoubleOrDefault(CellDestinationWidthTextBox.Text, existingOverride?.DestinationRectPercent?.WidthPercent ?? baseDestinationRect.WidthPercent),
+                HeightPercent = ParseDoubleOrDefault(CellDestinationHeightTextBox.Text, existingOverride?.DestinationRectPercent?.HeightPercent ?? baseDestinationRect.HeightPercent)
+            }
+            : null;
+
+        SliceCellOverrideDefinition? normalizedOverride = TwentyFiveSliceData.NormalizeCellOverrides(
+            sourceRect is null && destinationRect is null
+                ? []
+                :
+                [
+                    new SliceCellOverrideDefinition
+                    {
+                        Column = column,
+                        Row = row,
+                        SourceRectPercent = sourceRect,
+                        DestinationRectPercent = destinationRect
+                    }
+                ],
+            _verticalBorders.Length + 1,
+            _horizontalBorders.Length + 1).SingleOrDefault();
+
+        UpdateCellOverride(column, row, normalizedOverride);
+        UpdatePreview();
+        RememberCurrentState();
+    }
+
+    private void RefreshCellOverrideControls()
+    {
+        bool wasUpdating = _isUpdatingUi;
+        _isUpdatingUi = true;
+        try
+        {
+            if (!TryGetSelectedCellCoordinates(out int column, out int row))
+            {
+                SelectedCellText.Text = "Select X and Y segments to edit one cell.";
+                CellOverrideHintText.Text = "Per-cell overrides are absolute percentages of the full source image and current preview target.";
+                CellSourceOverrideCheckBox.IsEnabled = false;
+                CellDestinationOverrideCheckBox.IsEnabled = false;
+                CellSourceOverrideCheckBox.IsChecked = false;
+                CellDestinationOverrideCheckBox.IsChecked = false;
+                PopulateCellOverrideTextBoxes(null, null);
+                SetCellOverrideTextBoxEnabled(false, false);
+                return;
+            }
+
+            SliceCellOverrideDefinition? overrideDefinition = FindCellOverride(column, row);
+            if (!TryGetSelectedCellBaseRects(out column, out row, out SliceCellRectOverride baseSourceRect, out SliceCellRectOverride baseDestinationRect, out string statusText))
+            {
+                SelectedCellText.Text = statusText;
+                CellOverrideHintText.Text = "Per-cell overrides need a visible cell and resolved source dimensions.";
+                CellSourceOverrideCheckBox.IsEnabled = false;
+                CellDestinationOverrideCheckBox.IsEnabled = false;
+                CellSourceOverrideCheckBox.IsChecked = overrideDefinition?.SourceRectPercent is not null;
+                CellDestinationOverrideCheckBox.IsChecked = overrideDefinition?.DestinationRectPercent is not null;
+                PopulateCellOverrideTextBoxes(overrideDefinition?.SourceRectPercent, overrideDefinition?.DestinationRectPercent);
+                SetCellOverrideTextBoxEnabled(false, false);
+                return;
+            }
+
+            SelectedCellText.Text = statusText;
+            CellOverrideHintText.Text = $"Shared source {FormatRectPercent(baseSourceRect)}. Shared target {FormatRectPercent(baseDestinationRect)}.";
+            CellSourceOverrideCheckBox.IsEnabled = true;
+            CellDestinationOverrideCheckBox.IsEnabled = true;
+            CellSourceOverrideCheckBox.IsChecked = overrideDefinition?.SourceRectPercent is not null;
+            CellDestinationOverrideCheckBox.IsChecked = overrideDefinition?.DestinationRectPercent is not null;
+            PopulateCellOverrideTextBoxes(
+                overrideDefinition?.SourceRectPercent ?? baseSourceRect,
+                overrideDefinition?.DestinationRectPercent ?? baseDestinationRect);
+            SetCellOverrideTextBoxEnabled(CellSourceOverrideCheckBox.IsChecked == true, CellDestinationOverrideCheckBox.IsChecked == true);
+        }
+        finally
+        {
+            _isUpdatingUi = wasUpdating;
+        }
+    }
+
+    private void PopulateCellOverrideTextBoxes(SliceCellRectOverride? sourceRect, SliceCellRectOverride? destinationRect)
+    {
+        CellSourceXTextBox.Text = FormatPercentText(sourceRect?.XPercent);
+        CellSourceYTextBox.Text = FormatPercentText(sourceRect?.YPercent);
+        CellSourceWidthTextBox.Text = FormatPercentText(sourceRect?.WidthPercent);
+        CellSourceHeightTextBox.Text = FormatPercentText(sourceRect?.HeightPercent);
+        CellDestinationXTextBox.Text = FormatPercentText(destinationRect?.XPercent);
+        CellDestinationYTextBox.Text = FormatPercentText(destinationRect?.YPercent);
+        CellDestinationWidthTextBox.Text = FormatPercentText(destinationRect?.WidthPercent);
+        CellDestinationHeightTextBox.Text = FormatPercentText(destinationRect?.HeightPercent);
+    }
+
+    private void SetCellOverrideTextBoxEnabled(bool sourceEnabled, bool destinationEnabled)
+    {
+        CellSourceXTextBox.IsEnabled = sourceEnabled;
+        CellSourceYTextBox.IsEnabled = sourceEnabled;
+        CellSourceWidthTextBox.IsEnabled = sourceEnabled;
+        CellSourceHeightTextBox.IsEnabled = sourceEnabled;
+        CellDestinationXTextBox.IsEnabled = destinationEnabled;
+        CellDestinationYTextBox.IsEnabled = destinationEnabled;
+        CellDestinationWidthTextBox.IsEnabled = destinationEnabled;
+        CellDestinationHeightTextBox.IsEnabled = destinationEnabled;
+    }
+
+    private bool TryGetSelectedCellCoordinates(out int column, out int row)
+    {
+        column = XSegmentComboBox.SelectedIndex;
+        row = YSegmentComboBox.SelectedIndex;
+        return column >= 0 && column < _xSegments.Length && row >= 0 && row < _ySegments.Length;
+    }
+
+    private bool TryGetSelectedCellBaseRects(
+        out int column,
+        out int row,
+        out SliceCellRectOverride sourceRect,
+        out SliceCellRectOverride destinationRect,
+        out string statusText)
+    {
+        sourceRect = new SliceCellRectOverride();
+        destinationRect = new SliceCellRectOverride();
+        if (!TryGetSelectedCellCoordinates(out column, out row))
+        {
+            statusText = "Select X and Y segments to edit one cell.";
+            return false;
+        }
+
+        if (_xSegments[column].Mode == SliceSegmentMode.Hidden || _ySegments[row].Mode == SliceSegmentMode.Hidden)
+        {
+            statusText = $"Selected cell X{column}, Y{row} is hidden by current segment modes.";
+            return false;
+        }
+
+        if (!TryGetEffectiveSourceSize(out double sourceWidth, out double sourceHeight))
+        {
+            statusText = $"Selected cell X{column}, Y{row}. Load an image or import sprite metadata to edit per-cell overrides.";
+            return false;
+        }
+
+        sourceRect = GetGuideCellRectPercent(column, row);
+        TwentyFiveSliceData baseData = new TwentyFiveSliceData(_verticalBorders, _horizontalBorders, _xSegments, _ySegments);
+        IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(sourceWidth, sourceHeight, TargetWidthSlider.Value, TargetHeightSlider.Value, baseData);
+        foreach (SliceRegion region in regions)
+        {
+            if (region.Column != column || region.Row != row)
+            {
+                continue;
+            }
+
+            destinationRect = ToPercentRect(region.Destination, TargetWidthSlider.Value, TargetHeightSlider.Value);
+            statusText = $"Selected cell X{column}, Y{row}.";
+            return true;
+        }
+
+        statusText = $"Selected cell X{column}, Y{row} does not currently render.";
+        return false;
+    }
+
+    private bool TryGetEffectiveSourceSize(out double width, out double height)
+    {
+        if (_sourceImage is not null)
+        {
+            width = _sourceImage.PixelWidth;
+            height = _sourceImage.PixelHeight;
+            return true;
+        }
+
+        if (_spriteAssetContext is not null && _spriteAssetContext.SpriteRect.Width > 0 && _spriteAssetContext.SpriteRect.Height > 0)
+        {
+            width = _spriteAssetContext.SpriteRect.Width;
+            height = _spriteAssetContext.SpriteRect.Height;
+            return true;
+        }
+
+        width = 0d;
+        height = 0d;
+        return false;
+    }
+
+    private SliceCellOverrideDefinition? FindCellOverride(int column, int row)
+    {
+        return _cellOverrides.FirstOrDefault(overrideDefinition => overrideDefinition.Column == column && overrideDefinition.Row == row);
+    }
+
+    private void UpdateCellOverride(int column, int row, SliceCellOverrideDefinition? overrideDefinition)
+    {
+        List<SliceCellOverrideDefinition> updatedOverrides = _cellOverrides
+            .Where(existing => existing.Column != column || existing.Row != row)
+            .Select(existing => existing.Clone())
+            .ToList();
+
+        if (overrideDefinition is not null)
+        {
+            updatedOverrides.Add(overrideDefinition.Clone());
+        }
+
+        _cellOverrides = TwentyFiveSliceData.NormalizeCellOverrides(updatedOverrides, _verticalBorders.Length + 1, _horizontalBorders.Length + 1);
+    }
+
+    private SliceCellRectOverride GetGuideCellRectPercent(int column, int row)
+    {
+        double[] xStops = [0d, .. TwentyFiveSliceData.NormalizeAxis(_verticalBorders), 100d];
+        double[] yStops = [0d, .. TwentyFiveSliceData.NormalizeAxis(_horizontalBorders), 100d];
+        return new SliceCellRectOverride
+        {
+            XPercent = Math.Round(xStops[column], 3),
+            YPercent = Math.Round(yStops[row], 3),
+            WidthPercent = Math.Round(xStops[column + 1] - xStops[column], 3),
+            HeightPercent = Math.Round(yStops[row + 1] - yStops[row], 3)
+        };
+    }
+
+    private static SliceCellRectOverride ToPercentRect(FloatRect rect, double totalWidth, double totalHeight)
+    {
+        if (totalWidth <= 0d || totalHeight <= 0d)
+        {
+            return new SliceCellRectOverride();
+        }
+
+        return new SliceCellRectOverride
+        {
+            XPercent = Math.Round(rect.X * 100d / totalWidth, 3),
+            YPercent = Math.Round(rect.Y * 100d / totalHeight, 3),
+            WidthPercent = Math.Round(rect.Width * 100d / totalWidth, 3),
+            HeightPercent = Math.Round(rect.Height * 100d / totalHeight, 3)
+        };
+    }
+
+    private static string FormatRectPercent(SliceCellRectOverride rect)
+    {
+        return $"X {rect.XPercent:0.###}%, Y {rect.YPercent:0.###}%, W {rect.WidthPercent:0.###}%, H {rect.HeightPercent:0.###}%";
+    }
+
+    private static string FormatPercentText(double? value)
+    {
+        return value.HasValue ? value.Value.ToString("0.###", CultureInfo.InvariantCulture) : string.Empty;
     }
 
     private static double ParseDoubleOrDefault(string? text, double fallback)

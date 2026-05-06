@@ -16,10 +16,12 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     private static readonly Brush EmptyStateTitleBrush = CreateBrush(241, 234, 219);
     private static readonly Brush EmptyStateBodyBrush = CreateBrush(145, 165, 166);
     private static readonly Brush GuideHitBrush = CreateBrush(60, 199, 186, 42);
+    private static readonly Brush SelectedCellBrush = CreateBrush(255, 224, 122, 52);
     private static readonly Pen FramePen = CreatePen(70, 199, 190, 180, 1.5);
     private static readonly Pen SliceOutlinePen = CreatePen(255, 255, 255, 28, 0.75);
     private static readonly Pen GuidePen = CreatePen(60, 199, 186, 220, 1.25);
     private static readonly Pen ActiveGuidePen = CreatePen(255, 239, 190, 240, 2.25);
+    private static readonly Pen SelectedCellPen = CreatePen(255, 224, 122, 230, 2d);
     private static readonly Pen ShadowPen = CreatePen(0, 0, 0, 60, 18d);
 
     private BitmapSource? _sourceImage;
@@ -41,12 +43,15 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
     private int _activeHorizontalGuideIndex = -1;
     private int _selectedVerticalGuideIndex = -1;
     private int _selectedHorizontalGuideIndex = -1;
+    private int _selectedColumnIndex = -1;
+    private int _selectedRowIndex = -1;
     private bool _isPanning;
     private Point _lastPanPoint;
 
     public event EventHandler<SliceGuideEditEventArgs>? GuideEditChanged;
     public event EventHandler<SliceGuideSelectionEventArgs>? GuideSelectionChanged;
     public event EventHandler<SliceGuidePointerEventArgs>? GuidePointerChanged;
+    public event EventHandler<SliceCellSelectionEventArgs>? CellSelectionChanged;
     public event EventHandler<double>? PreviewZoomChanged;
 
     public TwentyFiveSlicePreviewControl()
@@ -201,6 +206,15 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         InvalidateVisual();
     }
 
+    public void SelectCell(int column, int row)
+    {
+        int maxColumn = SliceData.XSegments.Length - 1;
+        int maxRow = SliceData.YSegments.Length - 1;
+        _selectedColumnIndex = column >= 0 && column <= maxColumn ? column : -1;
+        _selectedRowIndex = row >= 0 && row <= maxRow ? row : -1;
+        InvalidateVisual();
+    }
+
     public void AdjustZoomFromMouseWheel(int wheelDelta)
     {
         PreviewZoom += (wheelDelta / 120d) * 0.05d;
@@ -327,6 +341,8 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
             DrawSlicedImage(drawingContext, previewRect, scale, DebuggingView, includeOutlines: true);
         }
 
+        DrawSelectedCell(drawingContext, previewRect, scale);
+
         DrawEditableGuides(drawingContext, previewRect);
 
         drawingContext.DrawRectangle(null, FramePen, previewRect);
@@ -352,24 +368,27 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
             return;
         }
 
-        if (!GuideEditingEnabled)
+        SliceGuideHit hit = GuideEditingEnabled ? HitTestGuide(point) : SliceGuideHit.None;
+        if (hit.Kind != SliceGuideHitKind.None)
+        {
+            _activeVerticalGuideIndex = hit.VerticalIndex;
+            _activeHorizontalGuideIndex = hit.HorizontalIndex;
+            SelectHitGuide(hit);
+            CaptureMouse();
+            Cursor = GetCursor(hit);
+            UpdateActiveGuides(point, isFinal: false);
+            e.Handled = true;
+            return;
+        }
+
+        UpdatePointer(point);
+        SliceCellHit cellHit = HitTestCell(point);
+        if (!cellHit.HasValue)
         {
             return;
         }
 
-        SliceGuideHit hit = HitTestGuide(point);
-        if (hit.Kind == SliceGuideHitKind.None)
-        {
-            UpdatePointer(point);
-            return;
-        }
-
-        _activeVerticalGuideIndex = hit.VerticalIndex;
-        _activeHorizontalGuideIndex = hit.HorizontalIndex;
-        SelectHitGuide(hit);
-        CaptureMouse();
-        Cursor = GetCursor(hit);
-        UpdateActiveGuides(point, isFinal: false);
+        SelectHitCell(cellHit);
         e.Handled = true;
     }
 
@@ -463,6 +482,18 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
             : SliceGuideHit.None;
     }
 
+    private SliceCellHit HitTestCell(Point point)
+    {
+        if (_sourceImage is null || _lastPreviewRect.IsEmpty)
+        {
+            return SliceCellHit.None;
+        }
+
+        double scale = _lastPreviewRect.Width / Math.Max(1d, TargetWidth);
+        IReadOnlyList<SliceRegion> regions = CalculatePreviewRegions(_lastPreviewRect, scale);
+        return SliceCellInteraction.HitTest(_lastPreviewRect, scale, regions, point);
+    }
+
     private void UpdateActiveGuides(Point point, bool isFinal)
     {
         if (!HasActiveGuide() || _lastPreviewRect.IsEmpty)
@@ -512,6 +543,14 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
         InvalidateVisual();
     }
 
+    private void SelectHitCell(SliceCellHit hit)
+    {
+        _selectedColumnIndex = hit.Column;
+        _selectedRowIndex = hit.Row;
+        CellSelectionChanged?.Invoke(this, new SliceCellSelectionEventArgs(hit.Column, hit.Row));
+        InvalidateVisual();
+    }
+
     private void UpdatePointer(Point point)
     {
         if (_lastPreviewRect.IsEmpty || !_lastPreviewRect.Contains(point))
@@ -543,14 +582,7 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
             return;
         }
 
-        IReadOnlyList<SliceRegion> regions = TwentyFiveSliceLayoutCalculator.CalculateRegions(
-            renderSource.PixelWidth,
-            renderSource.PixelHeight,
-            outputRect.Width / scale,
-            outputRect.Height / scale,
-            SliceData,
-            FlipX,
-            FlipY);
+        IReadOnlyList<SliceRegion> regions = CalculatePreviewRegions(outputRect, scale);
 
         foreach (SliceRegion region in regions)
         {
@@ -577,6 +609,54 @@ public sealed class TwentyFiveSlicePreviewControl : FrameworkElement
                 drawingContext.DrawRectangle(null, SliceOutlinePen, destinationRect);
             }
         }
+    }
+
+    private void DrawSelectedCell(DrawingContext drawingContext, Rect outputRect, double scale)
+    {
+        if (_selectedColumnIndex < 0 || _selectedRowIndex < 0)
+        {
+            return;
+        }
+
+        IReadOnlyList<SliceRegion> regions = CalculatePreviewRegions(outputRect, scale);
+        foreach (SliceRegion region in regions)
+        {
+            if (region.Column != _selectedColumnIndex || region.Row != _selectedRowIndex)
+            {
+                continue;
+            }
+
+            var destinationRect = new Rect(
+                outputRect.X + (region.Destination.X * scale),
+                outputRect.Y + (region.Destination.Y * scale),
+                region.Destination.Width * scale,
+                region.Destination.Height * scale);
+            if (destinationRect.Width <= 0d || destinationRect.Height <= 0d)
+            {
+                return;
+            }
+
+            drawingContext.DrawRectangle(SelectedCellBrush, SelectedCellPen, destinationRect);
+            return;
+        }
+    }
+
+    private IReadOnlyList<SliceRegion> CalculatePreviewRegions(Rect outputRect, double scale)
+    {
+        BitmapSource? renderSource = GetRenderSourceImage();
+        if (renderSource is null || scale <= 0d)
+        {
+            return [];
+        }
+
+        return TwentyFiveSliceLayoutCalculator.CalculateRegions(
+            renderSource.PixelWidth,
+            renderSource.PixelHeight,
+            outputRect.Width / scale,
+            outputRect.Height / scale,
+            SliceData,
+            FlipX,
+            FlipY);
     }
 
     private void DrawEmptyState(DrawingContext drawingContext, Rect bounds)

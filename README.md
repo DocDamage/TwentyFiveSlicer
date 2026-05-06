@@ -195,16 +195,19 @@ You can remove slice data that is no longer needed:
 
 ## Standalone Windows Desktop App
 
-A standalone WPF desktop app lives in `DesktopApp/TwentyFiveSlicer.Desktop`. It is intended for users who want the original 25-slice authoring workflow without opening Unity.
+A standalone WPF desktop app lives in `DesktopApp/TwentyFiveSlicer.Desktop`. It is intended for users who want desktop authoring and preview workflows without opening Unity.
 
 The desktop app preserves the important behavior from the Unity package:
 
-- 4 vertical borders and 4 horizontal borders stored as percentages.
-- Unity-compatible JSON using `verticalBorders` and `horizontalBorders`.
-- The same 5x5 fixed/stretch layout rules as `TwentyFiveSliceImage` and `TwentyFiveSliceSpriteRenderer`.
+- Backward-compatible loading of legacy 4-border Unity JSON using `verticalBorders` and `horizontalBorders`.
+- Schema version 2 variable-grid save format using `xGuidesPercent`, `yGuidesPercent`, `xSegments`, and `ySegments`.
+- Arbitrary X/Y guide authoring up to the desktop safety cap instead of a fixed 5x5 layout.
+- Per-guide X/Y coordinate editing through dynamic guide lists, percent entry, nudging, and preview dragging.
+- Per-cell freeform source and target rect overrides layered on top of the shared guide model.
+- Per-axis segment modes for every region boundary: `fixed`, `stretch`, and `hidden`.
 - Fixed-region scaling when the output target is smaller than the fixed edge total.
 - Flip X/Y, debug overlay, source guide comparison, and PNG preview export.
-- Direct guide dragging, including intersection handles that move vertical and horizontal guides together.
+- Direct guide dragging, including intersection handles that move vertical and horizontal guides together, plus click-to-select rendered preview cells.
 - Preview zoom from 50% to 200%, including slider, mouse wheel, quick zoom buttons, zoomed-preview panning, and 100% reset.
 
 ### Desktop Authoring Features
@@ -213,6 +216,7 @@ The desktop app preserves the important behavior from the Unity package:
 - Save and copy Unity-compatible slice JSON.
 - Export rendered PNG previews, with optional debug overlay.
 - Edit borders with sliders, numeric fields, or direct preview guide dragging.
+- Click any rendered preview cell to sync the selected X and Y segment pair before editing per-cell overrides.
 - Undo and redo border/target-size changes.
 - Recent file restore and last-session persistence.
 - Built-in presets, user presets, candidate preview/apply workflow, and batch checks across common target sizes.
@@ -244,7 +248,7 @@ Select a Sprite asset, `TwentyFiveSliceImage`, `TwentyFiveSliceSpriteRenderer`, 
 
 On the desktop side, the existing load-slice flow can now open that combined handoff envelope directly. If the referenced texture can be found locally, the desktop app restores the image, crop context, slice data, and runtime settings together from one file.
 
-The desktop toolbar now also includes `Export Handoff`, which writes the current slice data, sprite context, runtime settings, and preserved target metadata back into the same combined envelope format. Before saving, the desktop app warns when the current variable-grid layout will be rejected by Unity's fixed 25-slice importer.
+The desktop toolbar now also includes `Export Handoff`, which writes the current slice data, sprite context, runtime settings, and preserved target metadata back into the same combined envelope format. Before saving, the desktop app warns when the current variable-grid layout or any desktop-only per-cell overrides will be rejected by Unity's fixed 25-slice importer.
 
 ### Local And Cloud AI Assistance
 
