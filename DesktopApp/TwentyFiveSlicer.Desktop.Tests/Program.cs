@@ -952,7 +952,8 @@ static void SliceValidationWarnsForVariableGridHazards()
         data);
 
     Assert.Contains(messages, message => message.Text.Contains("hidden", StringComparison.OrdinalIgnoreCase));
-    Assert.Contains(messages, message => message.Text.Contains("thinner than 2 pixels", StringComparison.OrdinalIgnoreCase));
+    Assert.Contains(messages, message => message.Text.Contains("X segment 0", StringComparison.OrdinalIgnoreCase) && message.Text.Contains("0.5px", StringComparison.OrdinalIgnoreCase));
+    Assert.Contains(messages, message => message.Text.Contains("X guide 1", StringComparison.OrdinalIgnoreCase) && message.Text.Contains("source edge", StringComparison.OrdinalIgnoreCase));
     Assert.Contains(messages, message => message.Text.Contains("6 x 6", StringComparison.OrdinalIgnoreCase));
 }
 

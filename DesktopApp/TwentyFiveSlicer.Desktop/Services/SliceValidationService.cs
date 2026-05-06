@@ -19,14 +19,14 @@ public static class SliceValidationService
             return messages;
         }
 
-        double[] vertical = BuildSizes(sliceData.VerticalBorders, sourceWidth);
-        double[] horizontal = BuildSizes(sliceData.HorizontalBorders, sourceHeight);
-        SliceSegmentDefinition[] xSegments = TwentyFiveSliceData.NormalizeSegments(sliceData.XSegments, vertical.Length);
-        SliceSegmentDefinition[] ySegments = TwentyFiveSliceData.NormalizeSegments(sliceData.YSegments, horizontal.Length);
-        int columns = vertical.Length;
-        int rows = horizontal.Length;
-        double fixedColumns = GetFixedSize(vertical, xSegments);
-        double fixedRows = GetFixedSize(horizontal, ySegments);
+        AxisSegments vertical = BuildAxisSegments("X", sliceData.VerticalBorders, sourceWidth);
+        AxisSegments horizontal = BuildAxisSegments("Y", sliceData.HorizontalBorders, sourceHeight);
+        SliceSegmentDefinition[] xSegments = TwentyFiveSliceData.NormalizeSegments(sliceData.XSegments, vertical.Sizes.Length);
+        SliceSegmentDefinition[] ySegments = TwentyFiveSliceData.NormalizeSegments(sliceData.YSegments, horizontal.Sizes.Length);
+        int columns = vertical.Sizes.Length;
+        int rows = horizontal.Sizes.Length;
+        double fixedColumns = GetFixedSize(vertical.Sizes, xSegments);
+        double fixedRows = GetFixedSize(horizontal.Sizes, ySegments);
 
         if (columns > TwentyFiveSliceData.MaxSegmentsPerAxis || rows > TwentyFiveSliceData.MaxSegmentsPerAxis)
         {
@@ -47,10 +47,10 @@ public static class SliceValidationService
             messages.Add(new SliceValidationMessage(SliceValidationSeverity.Warning, $"The fixed rows need {fixedRows:0}px, more than the {targetHeight:0}px target height."));
         }
 
-        if (vertical.Any(size => size > 0d && size < 2d) || horizontal.Any(size => size > 0d && size < 2d))
-        {
-            messages.Add(new SliceValidationMessage(SliceValidationSeverity.Warning, "One or more slice regions is thinner than 2 pixels."));
-        }
+        AddGuideHazards(messages, vertical);
+        AddGuideHazards(messages, horizontal);
+        AddTinySegmentHazards(messages, vertical);
+        AddTinySegmentHazards(messages, horizontal);
 
         int hiddenColumns = xSegments.Count(segment => segment.Mode == SliceSegmentMode.Hidden);
         int hiddenRows = ySegments.Count(segment => segment.Mode == SliceSegmentMode.Hidden);
@@ -67,7 +67,7 @@ public static class SliceValidationService
         return messages;
     }
 
-    private static double[] BuildSizes(IReadOnlyList<double> borders, double totalSize)
+    private static AxisSegments BuildAxisSegments(string axis, IReadOnlyList<double> borders, double totalSize)
     {
         double[] normalized = TwentyFiveSliceData.NormalizeAxis(borders);
         double[] stops = [0d, .. normalized, 100d];
@@ -77,7 +77,37 @@ public static class SliceValidationService
             sizes[index] = (stops[index + 1] - stops[index]) * totalSize / 100d;
         }
 
-        return sizes;
+        return new AxisSegments(axis, stops, sizes, totalSize);
+    }
+
+    private static void AddGuideHazards(List<SliceValidationMessage> messages, AxisSegments axis)
+    {
+        for (int index = 1; index < axis.StopsPercent.Length - 1; index++)
+        {
+            double percent = axis.StopsPercent[index];
+            double pixel = axis.TotalPixels * percent / 100d;
+            double distanceToEdge = Math.Min(pixel, axis.TotalPixels - pixel);
+            if (distanceToEdge > 0d && distanceToEdge < 2d)
+            {
+                messages.Add(new SliceValidationMessage(
+                    SliceValidationSeverity.Warning,
+                    $"{axis.Axis} guide {index} is {distanceToEdge:0.##}px from a source edge."));
+            }
+        }
+    }
+
+    private static void AddTinySegmentHazards(List<SliceValidationMessage> messages, AxisSegments axis)
+    {
+        for (int index = 0; index < axis.Sizes.Length; index++)
+        {
+            double size = axis.Sizes[index];
+            if (size > 0d && size < 2d)
+            {
+                messages.Add(new SliceValidationMessage(
+                    SliceValidationSeverity.Warning,
+                    $"{axis.Axis} segment {index} is only {size:0.##}px wide ({axis.StopsPercent[index]:0.##}% to {axis.StopsPercent[index + 1]:0.##}%)."));
+            }
+        }
     }
 
     private static double GetFixedSize(IReadOnlyList<double> sizes, IReadOnlyList<SliceSegmentDefinition> segments)
@@ -93,4 +123,6 @@ public static class SliceValidationService
 
         return total;
     }
+
+    private sealed record AxisSegments(string Axis, double[] StopsPercent, double[] Sizes, double TotalPixels);
 }
